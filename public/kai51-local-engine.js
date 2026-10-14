@@ -58,6 +58,14 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
   async function loadTrainingPack(){
     if(trainingPack) return trainingPack;
     if(trainingPromise) return trainingPromise;
+    /* Use a fresh browser-cached pack first. The pack is optional prompt conditioning,
+       so repeated model boots must not hit Hatchable when a valid cached copy exists. */
+    let cached=null;
+    try{cached=JSON.parse(localStorage.getItem('haxbro:kai51:training-pack')||'null');}catch{}
+    if(cached?.pack&&Number.isFinite(Number(cached.savedAt))&&Date.now()-Number(cached.savedAt)<24*60*60*1000){
+      trainingPack=cached.pack;
+      return trainingPack;
+    }
     trainingPromise=(async()=>{
       const controller=new AbortController();
       let timer;
@@ -72,7 +80,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
         try{localStorage.setItem('haxbro:kai51:training-pack',JSON.stringify({savedAt:Date.now(),pack:d}));}catch{}
         return d;
       }catch(e){
-        try{const cached=JSON.parse(localStorage.getItem('haxbro:kai51:training-pack')||'null'); if(cached?.pack) return trainingPack=cached.pack;}catch{}
+        if(cached?.pack) return trainingPack=cached.pack;
         return trainingPack={ok:true,canonical:true,source:'HATCHABLE',rules:[] ,examples:[],warning:String(e?.message||e).slice(0,180)};
       }finally{clearTimeout(timer);trainingPromise=null;}
     })();
@@ -91,49 +99,12 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
       // Keep browser-side inference local after the public ONNX weights are downloaded.
       env.allowLocalModels=false;
       env.allowRemoteModels=true;
-      /* LOCAL fetches its smaller ONNX model from the public Hugging Face distribution.
-         GITHUB fetches HAxBRO's release assets through /api/kai-model using byte ranges. */
+      /* Both browser-local model profiles download their public ONNX assets directly
+         from the model host. Never proxy hundreds of MB through Hatchable: doing so
+         counts the full model transfer against Hatchable bandwidth for every uncached
+         visitor. The model IDs above are public Hugging Face ONNX repositories. */
       const nativeFetch=globalThis.fetch.bind(globalThis);
-      if(PROFILE==='github'){
-        /* The precision lane uses HAxBRO's actual GitHub release assets. The release
-           endpoint requires byte ranges for the large ONNX file, so stream it in
-           resumable 8 MiB ranges instead of issuing a single oversized request. */
-        env.fetch=async(input,init={})=>{
-          let url='',name='';
-          try{
-            url=typeof input==='string'||input instanceof URL?String(input):String(input?.url||'');
-            name=decodeURIComponent(new URL(url,location.href).pathname.split('/').pop());
-          }catch{}
-          if(!MODEL_ASSETS.has(name)) return nativeFetch(input,init);
-          const endpoint='/api/kai-model?file='+encodeURIComponent(name);
-          if(name!=='model_q4.onnx'&&name!=='model_q4f16.onnx') return nativeFetch(endpoint,init);
-          const headers=new Headers(init?.headers||(typeof Request!=='undefined'&&input instanceof Request?input.headers:undefined));
-          if(headers.has('range')) return nativeFetch(endpoint,{...init,headers});
-          const size=name==='model_q4.onnx'?386495938:272353302;
-          const chunkSize=4*1024*1024;
-          let start=0,downloaded=0;
-          const stream=new ReadableStream({
-            async pull(controller){
-              if(start>=size){controller.close();return;}
-              const end=Math.min(size-1,start+chunkSize-1);
-              try{
-                const response=await nativeFetch(endpoint,{headers:{Range:'bytes='+start+'-'+end},cache:'no-store'});
-                if(!response.ok) throw new Error('GitHub model range '+start+'-'+end+' failed: HTTP '+response.status);
-                const bytes=await response.arrayBuffer();
-                if(!bytes.byteLength) throw new Error('GitHub model range returned an empty chunk');
-                controller.enqueue(new Uint8Array(bytes));
-                start+=bytes.byteLength;downloaded+=bytes.byteLength;
-                progress(Math.min(94,15+Math.floor(downloaded/size*78)),'Downloading KAI 51 GITHUB model '+Math.round(downloaded/size*100)+'%');
-              }catch(error){controller.error(error);}
-            }
-          });
-          return new Response(stream,{status:200,headers:{'Content-Type':'application/octet-stream','Content-Length':String(size),'Accept-Ranges':'bytes'}});
-        };
-      }else{
-        /* Fetch LOCAL model assets directly from Hugging Face in the visitor's browser.
-           This avoids relaying the ~182 MB ONNX model through Hatchable for every visitor. */
-        env.fetch=async(input,init={})=>nativeFetch(input,init);
-      }
+      env.fetch=async(input,init={})=>nativeFetch(input,init);
       env.useBrowserCache=true;
       env.cacheKey='haxbro-kai51-q4-dual-model-v44';
 
