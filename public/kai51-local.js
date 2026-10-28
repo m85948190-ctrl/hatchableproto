@@ -201,11 +201,11 @@
     const ensureActive=()=>{if(signal?.aborted)throw new DOMException('Response stopped by user','AbortError')};
     const preferred=String(hooks?.preferred||'kai-router');
     const names=hooks?.skipLocal
-      ? (preferred==='kai-largest'?['largest','github','local','lite']:['github','lite'])
+      ? (preferred==='kai-largest'?['largest','github','local','lite']:['github','largest','lite'])
       : preferred==='kai-largest'?['largest','github','local','lite']
-      :preferred==='kai-github'?['github','local','lite']
-      :preferred==='kai-local'?['local','github','lite']
-      :['local','github','lite'];
+      :preferred==='kai-github'?['github','local','largest','lite']
+      :preferred==='kai-local'?['local','github','largest','lite']
+      :['local','github','largest','lite'];
     const labels={largest:'Google Gemma 3 270M',github:'KAI 51 GitHub 360M',local:'KAI 51 LOCAL',lite:'KAI Lite'};
     const errors=[];
     /* Keep request latency bounded while the optional Google Gemma 3 1B model downloads on first use. */
