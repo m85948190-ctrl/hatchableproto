@@ -69,10 +69,19 @@
   }
 
   async function searchWeb(query,mode='fast',signal){
-    const r=await fetch('/api/kai/search',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({query,mode})});
+    const username=(localStorage.getItem('haxbro_username')||'anonymous-device').trim().slice(0,64);
+    const r=await fetch('/api/kai/dual-browser-search',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({query,mode,username})});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok||!d.ok) throw new Error(d.error||'web search unavailable');
-    return d;
+    if(!r.ok||!d.ok) throw new Error(d.error||'Andi/Aelius browser search unavailable');
+    const engines=(d.engines||[]).filter(x=>x.ok);
+    const sources=(d.answerContext||[]).filter(x=>x.text).map(x=>({
+      title:x.title||x.engine||'Web result',
+      url:x.links?.[0]?.url||x.url||'',
+      text:clean(x.text,2200),
+      engine:x.engine||'Browser search'
+    }));
+    if(!sources.length) throw new Error('No readable Andi/Aelius result was returned');
+    return {ok:true,engine:engines.map(x=>x.engine).join(' + '),sources,engines:d.engines||[],links:d.sources||[]};
   }
 
   async function searchWikipedia(query){
@@ -218,7 +227,7 @@
     const wantsSearch=shouldSearch(prompt);
     let web=null,wiki=[],files=[];
     if(wantsSearch){
-      hooks.onStage?.('searching','KAI 51 · LOCAL is searching Google, Bing and Wikipedia in parallel');
+      hooks.onStage?.('searching','KAI 51 · LOCAL is researching with Andi AI, Aelius AI and Wikipedia');
       const [retrieved,knowledge]=await Promise.all([
         searchFast(query,hooks?.signal),
         searchKnowledge(query,hooks?.signal)
