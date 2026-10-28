@@ -17,6 +17,18 @@ async function researchWithBrowser(engine, query) {
       await page.goto(engine.url, { waitUntil: "domcontentloaded" });
       await new Promise(resolve => setTimeout(resolve, 900));
 
+      // Aelius sometimes leaves its public chat shell on a connection overlay.
+      // Try its own visible Retry control once; never bypass login or guest gates.
+      if (engine.id === "aelius") {
+        const retried = await page.evaluate(() => {
+          const button = document.querySelector("#appLoaderRetry");
+          if (!button || !(button.offsetWidth || button.offsetHeight || button.getClientRects().length)) return false;
+          button.click();
+          return true;
+        });
+        if (retried) await new Promise(resolve => setTimeout(resolve, 2500));
+      }
+
       const controls = await page.evaluate(() => Array.from(
         document.querySelectorAll('input:not([type="password"]), textarea, [contenteditable="true"], [role="textbox"]')
       ).map((el, index) => ({
@@ -97,15 +109,6 @@ async function researchWithBrowser(engine, query) {
       const useful = pageData.text.length > 120 &&
         !/enable javascript|checking your browser|captcha|access denied|couldn't start a guest session|sign in to continue|reload, or sign in/i.test(pageData.text.slice(-1200)) &&
         (pageData.links.length > 0 || /\/search|\/chat\//i.test(await page.url()));
-      const diagnostics = useful ? undefined : await page.evaluate(() => ({
-        buttons: Array.from(document.querySelectorAll('button')).slice(0,12).map(button => ({
-          text: (button.innerText || button.textContent || '').trim().slice(0,70),
-          aria: button.getAttribute('aria-label') || '',
-          title: button.getAttribute('title') || '',
-          html: button.outerHTML.slice(0,220)
-        })),
-        editor: document.querySelector('[contenteditable=true]')?.outerHTML.slice(0,400) || ''
-      }));
       return {
         ok: useful,
         engine: engine.name,
@@ -113,7 +116,6 @@ async function researchWithBrowser(engine, query) {
         title: await page.title(),
         text: pageData.text,
         links: pageData.links,
-        diagnostics,
         error: useful ? null : "The site did not expose a readable answer after browser submission."
       };
     });
