@@ -172,6 +172,8 @@
         try{
           const turn=await window.HAxBROKaiLocalIntelligence.run(message,history,{onStage:hooks.onStage,signal});ensureActive();
           if(turn?.response&&!turn.handoff){
+          /* Instant local answers (social turns, calculations, and source-grounded answers) are already complete. Do not feed them into a tiny neural model that may corrupt a good answer. */
+          return {...turn,lane:'local',combined:true};
             /* Only source-backed retrieval belongs in the evidence wrapper. Casual
                turns and calculations still go to neural inference as the original request. */
             if((Array.isArray(turn.sources)&&turn.sources.length)||(Array.isArray(turn.searchEngines)&&turn.searchEngines.length)){
