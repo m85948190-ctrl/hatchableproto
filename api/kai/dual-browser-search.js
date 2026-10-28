@@ -110,7 +110,27 @@ async function researchWithBrowser(engine, query) {
         try { await page.keyboard.press("Enter"); }
         catch { return { ok: false, engine: engine.name, url: await page.url(), title: await page.title(), error: "Could not submit the search through the page interface.", text: "" }; }
       }
-      await new Promise(resolve => setTimeout(resolve, 4500));
+
+      // Andi separates source snippets from its synthesized answer. When its
+      // visible "Generate Answer" action appears, click it and wait for the
+      // answer state before extracting page text. This is the key human-like
+      // interaction; reading the initial search page alone can return a
+      // fragment/snippet that is not Andi's composed answer.
+      if (engine.id === "andi") {
+        const generated = await page.evaluate(() => {
+          const visible = node => !!(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+          const controls = Array.from(document.querySelectorAll("button,[role=button],a")).filter(visible);
+          const button = controls.find(node => /^generate answer$/i.test(
+            (node.innerText || node.textContent || node.getAttribute("aria-label") || node.getAttribute("title") || "").replace(/\\s+/g, " ").trim()
+          ));
+          if (!button || button.disabled || button.getAttribute("aria-disabled") === "true") return false;
+          button.click();
+          return true;
+        });
+        if (generated) await new Promise(resolve => setTimeout(resolve, 3500));
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
       const pageData = await page.evaluate(() => {
         const text = (document.body?.innerText || document.body?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 9000);
         const links = Array.from(document.querySelectorAll("a[href]")).map(a => ({
