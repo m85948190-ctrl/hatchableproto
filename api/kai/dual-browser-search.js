@@ -48,40 +48,41 @@ async function researchWithBrowser(engine, query) {
 
       const selector = target.id ? "#" + target.id :
         target.name ? target.tag + '[name="' + target.name.replace(/"/g, '\\"') + '"]' :
-        target.tag + (target.type ? '[type="' + target.type + '"]' : "") + ":nth-of-type(" + (target.index + 1) + ")";
+        target.placeholder ? (target.tag === "div" ? '[contenteditable="true"]' : target.tag) + '[placeholder="' + target.placeholder.replace(/"/g, '\\"') + '"]' :
+        target.aria ? target.tag + '[aria-label="' + target.aria.replace(/"/g, '\\"') + '"]' :
+        target.tag + (target.type ? '[type="' + target.type + '"]' : "");
 
       await page.click(selector);
       await page.type(selector, query, { delay: 22 });
 
-      // Submit through the site's visible interface. Do not call provider APIs.
-      let submitted = false;
-      try { await page.keyboard.press("Enter"); submitted = true; } catch {}
-      if (!submitted) {
-        submitted = await page.evaluate(() => {
-          const el = document.activeElement;
-          const form = el?.closest("form");
-          if (form) {
-            if (typeof form.requestSubmit === "function") form.requestSubmit();
-            else form.submit();
-            return true;
-          }
+      // Prefer the visible submit control next to the composer; use Enter only as a fallback.
+      const submitted = await page.evaluate(() => {
+        const el = document.activeElement;
+        const form = el?.closest("form");
+        if (form) {
           const visible = node => !!(node.offsetWidth || node.offsetHeight || node.getClientRects().length);
-          const buttons = Array.from(document.querySelectorAll('button,[role="button"],input[type="submit"]')).filter(visible);
-          const button = buttons.find(node => /search|ask|send|go|submit/i.test((node.innerText || node.textContent || node.value || node.getAttribute("aria-label") || "").trim()));
+          const buttons = Array.from(form.querySelectorAll('button,[role="button"],input[type="submit"]')).filter(visible);
+          const button = buttons.find(node => /search|ask|send|go|submit/i.test((node.innerText || node.textContent || node.value || node.getAttribute("aria-label") || node.getAttribute("title") || "").trim()));
           if (button) { button.click(); return true; }
-          return false;
-        });
-      }
+          if (typeof form.requestSubmit === "function") form.requestSubmit();
+          else form.submit();
+          return true;
+        }
+        const editor = el?.closest('[contenteditable="true"]') || el;
+        let node = editor;
+        for (let depth = 0; depth < 5 && node; depth++, node = node.parentElement) {
+          const visible = item => !!(item.offsetWidth || item.offsetHeight || item.getClientRects().length);
+          const buttons = Array.from(node.querySelectorAll('button,[role="button"],input[type="submit"]')).filter(visible);
+          const button = buttons.find(item => /search|ask|send|go|submit/i.test((item.innerText || item.textContent || item.value || item.getAttribute("aria-label") || item.getAttribute("title") || "").trim()));
+          if (button) { button.click(); return true; }
+          if (buttons.length > 0 && buttons.length <= 3) { buttons[buttons.length - 1].click(); return true; }
+        }
+        return false;
+      });
       if (!submitted) {
-        const diagnostic = await page.evaluate(() => ({
-          controls: Array.from(document.querySelectorAll('button,[role="button"],input:not([type="password"]),textarea,[contenteditable="true"]')).slice(0,20).map(el => ({
-            tag: el.tagName, text: (el.innerText || el.textContent || el.value || "").trim().slice(0,80),
-            placeholder: el.getAttribute("placeholder") || "", aria: el.getAttribute("aria-label") || ""
-          }))
-        }));
-        return { ok: false, engine: engine.name, url: await page.url(), title: await page.title(), error: "Could not submit the search through the page interface.", text: "", diagnostic };
+        try { await page.keyboard.press("Enter"); }
+        catch { return { ok: false, engine: engine.name, url: await page.url(), title: await page.title(), error: "Could not submit the search through the page interface.", text: "" }; }
       }
-
       await new Promise(resolve => setTimeout(resolve, 4500));
       const pageData = await page.evaluate(() => {
         const text = (document.body?.innerText || document.body?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 9000);
@@ -94,7 +95,8 @@ async function researchWithBrowser(engine, query) {
       });
 
       const useful = pageData.text.length > 120 &&
-        !/enable javascript|checking your browser|captcha|access denied/i.test(pageData.text.slice(-800));
+        !/enable javascript|checking your browser|captcha|access denied|couldn't start a guest session|sign in to continue|reload, or sign in/i.test(pageData.text.slice(-1200)) &&
+        (pageData.links.length > 0 || /\/search|\/chat\//i.test(await page.url()));
       return {
         ok: useful,
         engine: engine.name,
