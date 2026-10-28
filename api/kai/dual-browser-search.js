@@ -53,19 +53,36 @@ async function researchWithBrowser(engine, query) {
       await page.click(selector);
       await page.type(selector, query, { delay: 22 });
 
-      // Submit through the site's normal keyboard interface; no API endpoints or credentials.
-      try { await page.keyboard.press("Enter"); }
-      catch {
-        const submitted = await page.evaluate(() => {
+      // Submit through the site's visible interface. Do not call provider APIs.
+      let submitted = false;
+      try { await page.keyboard.press("Enter"); submitted = true; } catch {}
+      if (!submitted) {
+        submitted = await page.evaluate(() => {
           const el = document.activeElement;
           const form = el?.closest("form");
-          if (form) { form.requestSubmit(); return true; }
+          if (form) {
+            if (typeof form.requestSubmit === "function") form.requestSubmit();
+            else form.submit();
+            return true;
+          }
+          const visible = node => !!(node.offsetWidth || node.offsetHeight || node.getClientRects().length);
+          const buttons = Array.from(document.querySelectorAll('button,[role="button"],input[type="submit"]')).filter(visible);
+          const button = buttons.find(node => /search|ask|send|go|submit/i.test((node.innerText || node.textContent || node.value || node.getAttribute("aria-label") || "").trim()));
+          if (button) { button.click(); return true; }
           return false;
         });
-        if (!submitted) return { ok: false, engine: engine.name, url: await page.url(), title: await page.title(), error: "Could not submit the search through the page interface.", text: "" };
+      }
+      if (!submitted) {
+        const diagnostic = await page.evaluate(() => ({
+          controls: Array.from(document.querySelectorAll('button,[role="button"],input:not([type="password"]),textarea,[contenteditable="true"]')).slice(0,20).map(el => ({
+            tag: el.tagName, text: (el.innerText || el.textContent || el.value || "").trim().slice(0,80),
+            placeholder: el.getAttribute("placeholder") || "", aria: el.getAttribute("aria-label") || ""
+          }))
+        }));
+        return { ok: false, engine: engine.name, url: await page.url(), title: await page.title(), error: "Could not submit the search through the page interface.", text: "", diagnostic };
       }
 
-      await new Promise(resolve => setTimeout(resolve, 2200));
+      await new Promise(resolve => setTimeout(resolve, 4500));
       const pageData = await page.evaluate(() => {
         const text = (document.body?.innerText || document.body?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 9000);
         const links = Array.from(document.querySelectorAll("a[href]")).map(a => ({
