@@ -17,16 +17,31 @@ async function researchWithBrowser(engine, query) {
       await page.goto(engine.url, { waitUntil: "domcontentloaded" });
       await new Promise(resolve => setTimeout(resolve, 900));
 
-      // Aelius sometimes leaves its public chat shell on a connection overlay.
-      // Try its own visible Retry control once; never bypass login or guest gates.
+      // Treat the page as an interface to operate, not a static search box.
+      // Choose the ordinary chat path through visible onboarding controls, then
+      // open a fresh chat. Never click sign-in, account creation, billing, or OAuth.
       if (engine.id === "aelius") {
-        const retried = await page.evaluate(() => {
-          const button = document.querySelector("#appLoaderRetry");
-          if (!button || !(button.offsetWidth || button.offsetHeight || button.getClientRects().length)) return false;
-          button.click();
-          return true;
+        const clicked = await page.evaluate(() => {
+          const visible = node => !!(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length));
+          const buttons = Array.from(document.querySelectorAll("button,[role=button]")).filter(visible);
+          const clickText = pattern => {
+            const node = buttons.find(item => pattern.test((item.innerText || item.textContent || item.getAttribute("aria-label") || item.getAttribute("title") || "").replace(/\\s+/g, " ").trim()));
+            if (!node) return false;
+            node.click();
+            return true;
+          };
+          // The first-run chooser offers several task modes; General AI is the
+          // neutral option for a question that is not specifically coding/writing.
+          const choseGeneral = clickText(/^General AI\\b/i);
+          const continued = clickText(/^Continue$/i);
+          const newChat = clickText(/^New chat$/i);
+          const retry = document.querySelector("#appLoaderRetry");
+          const retried = visible(retry) ? (retry.click(), true) : false;
+          return { choseGeneral, continued, newChat, retried };
         });
-        if (retried) await new Promise(resolve => setTimeout(resolve, 2500));
+        if (clicked.choseGeneral || clicked.continued || clicked.newChat || clicked.retried) {
+          await new Promise(resolve => setTimeout(resolve, 1800));
+        }
       }
 
       const controls = await page.evaluate(() => Array.from(
