@@ -97,6 +97,15 @@ async function researchWithBrowser(engine, query) {
       const useful = pageData.text.length > 120 &&
         !/enable javascript|checking your browser|captcha|access denied|couldn't start a guest session|sign in to continue|reload, or sign in/i.test(pageData.text.slice(-1200)) &&
         (pageData.links.length > 0 || /\/search|\/chat\//i.test(await page.url()));
+      const diagnostics = useful ? undefined : await page.evaluate(() => ({
+        buttons: Array.from(document.querySelectorAll('button')).slice(0,12).map(button => ({
+          text: (button.innerText || button.textContent || '').trim().slice(0,70),
+          aria: button.getAttribute('aria-label') || '',
+          title: button.getAttribute('title') || '',
+          html: button.outerHTML.slice(0,220)
+        })),
+        editor: document.querySelector('[contenteditable=true]')?.outerHTML.slice(0,400) || ''
+      }));
       return {
         ok: useful,
         engine: engine.name,
@@ -104,6 +113,7 @@ async function researchWithBrowser(engine, query) {
         title: await page.title(),
         text: pageData.text,
         links: pageData.links,
+        diagnostics,
         error: useful ? null : "The site did not expose a readable answer after browser submission."
       };
     });
