@@ -8,11 +8,12 @@
   function queryFor(message){
     return clean(message)
       .replace(/^\s*(?:please\s+)?(?:can you|could you|would you|tell me|explain|help me)\s+/i,'')
-      .replace(/^\s*(?:what is|what are|who is|who are|where is|where are|when did|when was|why does|why do|how does|how do|how is|how are)\s+/i,'')
+      .replace(/^\s*(?:what causes|what caused|what makes|what made|what is|what are|who is|who are|where is|where are|when did|when was|why does|why do|why is|why are|how does|how do|how is|how are)\s+/i,'')
+      .replace(/\s+(?:and\s+)?(?:why|how)\s+(?:do|does|did|is|are|can|could|would|will)\s+(?:he|she|it|they|we|you|plants|batteries|the|this|that)\b[\s\S]*$/i,' ')
       .replace(/\b(?:explain it simply|explain simply|in simple terms|in simple words|briefly|please)\b/ig,' ')
       .replace(/^\s*(?:the\s+)?(?:current|latest|recent)\s+/i,'')
+      .replace(/^\s*(?:the|a|an)\s+/i,'')
       .replace(/\b(?:give|provide|include|cite|list|show)\s+(?:me\s+)?(?:a\s+)?(?:(?:short|brief|accurate|concise|detailed|simple)\s+){0,3}(?:answer|summary|response|sources?|citations?|references?)\b.*$/i,' ')
-      .replace(/[,;]\s*(?:and\s+)?(?:what|who|why|how)\s+(?:is|was|are|were|does|did|can|could)\s+(?:he|she|it|they)\b.*$/i,' ')
       .replace(/[?!.]+$/,'').replace(/\s+/g,' ').trim().slice(0,700);
   }
 

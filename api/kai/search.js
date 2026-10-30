@@ -111,7 +111,14 @@ async function multiSearch(query,mode="fast"){
   const terms=clean(query,500).toLowerCase().match(/[a-z0-9]{4,}/g)||[];
   const stop=new Set(["what","when","where","which","that","this","with","from","does","have","your","about","into","they","them","their","there","then","than","were","will","would","could","should","also","just","some","more","most","much","many","make","made","work","works","using","used","based","explain","please","tell","show"]);
   const keyTerms=[...new Set(terms.filter(t=>!stop.has(t)))];
-  const filterRelevant=rows=>rows.filter(x=>{if(!keyTerms.length)return true;const text=(x.title+" "+x.text).toLowerCase();return keyTerms.some(term=>text.includes(term));});
+  const filterRelevant=rows=>rows.filter(x=>{
+    if(!keyTerms.length)return true;
+    const text=(x.title+" "+x.text).toLowerCase();
+    const matches=keyTerms.filter(term=>text.includes(term)).length;
+    // One generic word (e.g. "causes" or "lithium") must not make an unrelated
+    // result look relevant. Require two topic terms whenever the query has two+.
+    return matches>=(keyTerms.length>=2?2:1);
+  });
   const google=filterRelevant(collect(googleResults,"Google Web",6));
   const bing=filterRelevant(collect(bingResults,"Bing Web",6));
   const duckduckgo=filterRelevant(collect(ddgResults,"DuckDuckGo Instant Answers",6));
@@ -185,7 +192,7 @@ async function wikipediaEvidence(query){
     const rows=Array.isArray(data?.query?.search)?data.query.search:[];
     const summaries=await Promise.all(rows.slice(0,3).map(row=>fetchSummary(String(row.title||""),1500)));
     const terms=normalized.toLowerCase().split(/\s+/).filter(w=>w.length>2&&!["the","and","for","with","from","what","who","when","where","how","current","latest","about"].includes(w));
-    return summaries.filter(Boolean).map(x=>({...x,_score:terms.filter(t=>(x.title+" "+x.text).toLowerCase().includes(t)).length})).filter(x=>x._score>0).sort((a,b)=>b._score-a._score).map(({_score,...x})=>x).slice(0,2);
+    return summaries.filter(Boolean).map(x=>({...x,_score:terms.filter(t=>(x.title+" "+x.text).toLowerCase().includes(t)).length})).filter(x=>x._score>=(terms.length>=3?2:1)).sort((a,b)=>b._score-a._score).map(({_score,...x})=>x).slice(0,2);
   }catch{return []}finally{clearTimeout(timer)}
 }
 
@@ -209,7 +216,7 @@ export default async function(req,res){
         const timeout=mode==="deep"?10000:8500;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
-        const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue/i.test(text);
+        const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden/i.test(text);
         if(text.length>180&&!blocked)return {...x,text:text.slice(0,9000),readStatus:"page-read"};
         return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
       }catch{return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
