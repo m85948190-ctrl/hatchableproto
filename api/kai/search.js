@@ -86,25 +86,28 @@ async function bingSearch(query){
 async function multiSearch(query,mode="fast"){
   const variants=queryVariants(query);
   const primary=variants.slice(0,mode==="deep"?3:1);
-  // Google and Bing run concurrently; never wait for one engine to fail before starting the other.
-  const deadline=mode==="deep"?5000:1800;
+  // Run three independent public search engines in parallel. A failure in one
+  // engine must not suppress results from the others.
+  const deadline=mode==="deep"?9000:5000;
   const settled=await Promise.race([
     Promise.all([
       Promise.all(primary.map(async q=>{try{return await googleSearch(q)}catch{return []}})),
-      Promise.all(primary.map(async q=>{try{return await bingSearch(q)}catch{return []}}))
+      Promise.all(primary.map(async q=>{try{return await bingSearch(q)}catch{return []}})),
+      Promise.all(primary.map(async q=>{try{return await ddgSearch(q)}catch{return []}}))
     ]),
-    new Promise(resolve=>setTimeout(()=>resolve([[],[]]),deadline))
+    new Promise(resolve=>setTimeout(()=>resolve([[],[],[]]),deadline))
   ]);
-  const [googleResults,bingResults]=settled||[[],[]];
+  const [googleResults,bingResults,ddgResults]=settled||[[],[],[]];
   const collect=(lists,engine,limit)=>{const out=[],seen=new Set();for(const list of lists||[])for(const x of list||[]){if(!x?.url||seen.has(x.url))continue;seen.add(x.url);out.push({...x,engine});if(out.length>=limit)return out;}return out;};
   const google=collect(googleResults,"Google Web",6);
   const bing=collect(bingResults,"Bing Web",6);
+  const duckduckgo=collect(ddgResults,"DuckDuckGo Web",6);
   const merged=[],seen=new Set();
-  // Interleave results so one engine cannot monopolize the evidence set.
-  for(let i=0;i<Math.max(google.length,bing.length);i++){for(const x of [google[i],bing[i]])if(x&&!seen.has(x.url)){seen.add(x.url);merged.push(x);}}
-  if(merged.length)return {links:merged.slice(0,mode==="deep"?12:8),engine:"Google + Bing Web",engines:{google:google.length,bing:bing.length}};
-  const fallbackResults=await Promise.all(primary.slice(0,2).map(async q=>{try{return await ddgSearch(q)}catch{return []}}));
-  return {links:collect(fallbackResults,"Fallback Web Search",8),engine:"Fallback Web Search"};
+  // Interleave providers so one engine cannot monopolize the evidence set.
+  for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length);i++){
+    for(const x of [google[i],bing[i],duckduckgo[i]])if(x&&!seen.has(x.url)){seen.add(x.url);merged.push(x);}
+  }
+  return {links:merged.slice(0,mode==="deep"?15:12),engine:"Google + Bing + DuckDuckGo",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length}};
 }
 
 async function ddgSearch(query){
@@ -176,21 +179,23 @@ export default async function(req,res){
       wikipediaEvidence(query)
     ]);
     const links=searched.links||[];
-    const take=mode==="deep"?5:3;
+    const take=mode==="deep"?8:5;
+    // Open actual result pages, not just search snippets. Keep the snippet only
+    // as a clearly marked fallback when a publisher page is unavailable.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
       const snippet=clean(x.text||"",1400);
-      if(snippet.length>=90)return {...x,text:snippet};
       try{
-        const timeout=mode==="deep"?2200:650;
+        const timeout=mode==="deep"?6500:4200;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
-        return {...x,text:text.length>snippet.length?text:snippet};
-      }catch{return {...x,text:snippet}}
+        if(text.length>180)return {...x,text:text.slice(0,9000),readStatus:"page-read"};
+        return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
+      }catch{return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
     }));
-    const combined=[...pages,...wiki].filter(x=>x.text||x.title);
+    const combined=[...pages,...wiki.map(x=>({...x,readStatus:"wikipedia-article"}))].filter(x=>x.text||x.title);
     const seen=new Set();
-    const sources=combined.filter(x=>{const key=x.url||x.title;if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,Math.max(take,Math.min(5,wiki.length+pages.length)));
-    return res.json({ok:true,engine:wiki.length?[searched.engine,"Wikipedia"].filter(Boolean).join(" + "):searched.engine,mode,query,searchQueries:queryVariants(query),sources});
+    const sources=combined.filter(x=>{const key=x.url||x.title;if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,take+2);
+    return res.json({ok:true,engine:[searched.engine,wiki.length?"Wikipedia":""].filter(Boolean).join(" + "),engines:searched.engines||{},mode,query,searchQueries:queryVariants(query),sources});
   }catch(e){
     return res.status(502).json({ok:false,error:"KAI web search unavailable",detail:clean(e?.message,300)});
   }

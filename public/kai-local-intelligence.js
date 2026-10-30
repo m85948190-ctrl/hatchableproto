@@ -59,29 +59,31 @@
 
   function shouldSearch(message){
     const t=clean(message).toLowerCase();
-    // Greetings, relationship-building, self-referential questions, and personal memory
-    // stay conversational; they should not launch a browser search.
-    if(/^(hi|hello|hey|yo|good morning|good afternoon|good evening|thanks|thank you|thx|ok|okay|sure|yes|yeah|yep|no|nah|got it)\b/i.test(t)) return false;
-    if(/\b(?:how are you|what can you do|what can you help me with|what do you think|tell me about yourself|who are you|what is your name|can we talk|let's talk|lets talk|remember that|what do you remember about me|what answer style do i prefer|i feel|i think|i prefer|i like|call me|my name is|forget everything|clear my memory)\b/i.test(t)) return false;
-    // Research only when the wording signals a factual lookup, current information,
-    // verification, or explicit research intent—not merely because a sentence is long.
-    return /\b(?:what is|what are|what was|what were|who is|who are|who was|who were|where is|where are|where was|when did|when was|when is|why was|why could|how could|how can|latest|recent|today|news|price|cost|version|release|update|current|weather|comparing|comparisons|evidence|sources?|research|look up|find out|verify|check|search|according to|statistics|study|paper|official|explains|tell me about|meanings|history|fact|facts|population|capital|definition|calculation|conversion)\b/i.test(t);
+    // Keep explicit memory commands local, but let the neural model handle ordinary
+    // conversation. Research broad factual questions instead of relying on a narrow
+    // list of exact trigger phrases. Creative/editing requests do not need web lookup.
+    if(/^\s*(?:please\s+)?(?:remember|forget)\b/i.test(t)) return false;
+    if(/\b(?:write|draft|rewrite|polish|translate|summarize|format|generate|create|compose|brainstorm)\b/i.test(t) && !/\b(?:latest|current|today|recent|news|price|statistics|research|verify|sources?)\b/i.test(t)) return false;
+    if(/^(?:hi|hello|hey|yo|good morning|good afternoon|good evening|thanks|thank you|thx|ok|okay|sure|yes|yeah|yep|no|nah|got it)[!. ]*$/i.test(t)) return false;
+    if(/^(?:how are you|what'?s up|what are you doing|are you there|who are you|what(?:'s| is) your name|what can you do|what do you think|can we talk|let'?s talk|can you help me)[?.! ]*$/i.test(t)) return false;
+    if(/\b(?:what do you remember about me|what answer style do i prefer|my name is|call me|i prefer|i like|i feel|i'm bored|i am bored|rough day|bad day|need someone to talk)\b/i.test(t)) return false;
+    return /\?|\b(?:what|who|where|when|why|how|which|explain|define|compare|contrast|analy[sz]e|investigate|research|look up|find out|verify|check|search|tell me about|teach me|describe|overview|latest|recent|today|news|price|cost|version|release|update|current|weather|according to|statistics|study|paper|official|history|fact|facts|population|capital|meaning|evidence|source)\b/i.test(t);
   }
 
   async function searchWeb(query,mode='fast',signal){
     const username=(localStorage.getItem('haxbro_username')||'anonymous-device').trim().slice(0,64);
-    const r=await fetch('/api/kai/dual-browser-search',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({query,mode,username})});
+    const r=await fetch('/api/kai/search',{method:'POST',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({query,mode:mode==='deep'?'deep':'fast'})});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok||!d.ok) throw new Error(d.error||'Andi/Aelius browser search unavailable');
-    const engines=(d.engines||[]).filter(x=>x.ok);
-    const sources=(d.answerContext||[]).filter(x=>x.text).map(x=>({
-      title:x.title||x.engine||'Web result',
-      url:x.links?.[0]?.url||x.url||'',
-      text:clean(x.text,2200),
-      engine:x.engine||'Browser search'
+    if(!r.ok||!d.ok) throw new Error(d.error||'Google/Bing/DuckDuckGo search unavailable');
+    const sources=(d.sources||[]).filter(x=>x.text).map(x=>({
+      title:x.title||x.engine||'Web page',
+      url:x.url||'',
+      text:clean(x.text,4200),
+      engine:x.engine||d.engine||'Web search',
+      readStatus:x.readStatus||'retrieved'
     }));
-    if(!sources.length) throw new Error('No readable Andi/Aelius result was returned');
-    return {ok:true,engine:engines.map(x=>x.engine).join(' + '),sources,engines:d.engines||[],links:d.sources||[]};
+    if(!sources.length) throw new Error('Search returned no readable page content');
+    return {ok:true,engine:d.engine||'Google + Bing + DuckDuckGo + Wikipedia',sources,engines:d.engines||[],links:sources.map(({title,url,engine})=>({title,url,engine}))};
   }
 
   async function searchWikipedia(query){
@@ -181,40 +183,13 @@
     const ensureActive=()=>{if(hooks?.signal?.aborted)throw new DOMException('Response stopped by user','AbortError')};ensureActive();
     const prompt=clean(message);
     if(!prompt) throw new Error('empty request');
-    // Social turns must return before retrieval or neural-model loading. The UI's elapsed
-    // time measures the complete turn, so never hand these messages to the model bootstrap.
-    const socialText=prompt.toLowerCase().replace(/[’‘]/g,"'").replace(/[!?.,]+$/,'').trim();
-    const identityQuestion=/^(?:who are you|what(?:'s| is) your name|are you kai(?:\s*51)?|tell me about yourself|what is haxbro)$/i.test(socialText);
-    if(identityQuestion){
-      return {lane:'local',handoff:false,response:'I’m KAI 51, the AI assistant inside HAxBRO. I can help you chat, research, write code, and build things.',provider:'KAI 51 LOCAL · identity response',model:'local identity guard',local:true,localModel:false,sources:[],searchEngines:[],retrievalMs:0};
-    }
-    const socialGreeting=/^(?:a\s+)?(?:hi|hello|hey|yo|howdy|sup|what'?s up)(?:\s+bro)?$/i.test(socialText);
-    const socialCombo=/^(?:(?:haha+|lol+|hehe+|wow+)[,\s]+)?(?:a\s+)?(?:hi|hello|hey|yo|sup)(?:[,\s]+(?:haha+|lol+|hehe+))?$/i.test(socialText);
-    const socialReaction=/^(?:o+|h+m+|hmm+|h+e+h+|l+o+l+|haha+|wow+|whoa+|huh+|uh+|um+|nice|cool|yay+|bruh|bro+|okay+|ok+|👍|😂|❤️|😅|🤔)$/i.test(socialText);
-    const socialConversation=/^(?:(?:hey|hi|hello|bro)[,\s]+)*(?:what'?s up|what are you doing|what're you doing|what are you up to|what's going on|whats going on|how are you|how's it going|hows it going|are you there|you there)$/i.test(socialText);
-    const boredomConversation=/\b(?:i(?:'m| am) bored|bored and want to talk|nothing to do|i have nothing to do)\b/i.test(socialText);
-    const emotionalConversation=/\b(?:rough day|bad day|terrible day|awful day|feeling (?:sad|down|lonely|anxious|worried|upset|overwhelmed)|i(?:'m| am) (?:sad|lonely|stressed|upset|overwhelmed|frustrated)|i just want to talk|need someone to talk)\b/i.test(socialText);
-    if(boredomConversation){
-      return {lane:'local',handoff:false,response:'Let’s fix that, bro 😄 Want to chat, hear a weird fact, play a quick word game, or build something?',provider:'KAI 51 LOCAL · casual conversation path',model:'local conversational response',local:true,localModel:false,sources:[],searchEngines:[],retrievalMs:0};
-    }
-    if(emotionalConversation){
-      return {lane:'local',handoff:false,response:'I’m sorry it’s been a rough one, bro. I’m here to listen—want to tell me what happened?',provider:'KAI 51 LOCAL · empathetic conversation path',model:'local conversational response',local:true,localModel:false,sources:[],searchEngines:[],retrievalMs:0};
-    }
-    if(socialGreeting||socialCombo||socialReaction||socialConversation){
-      const response=socialConversation
-        ? /\b(?:how are you|how's it going|hows it going)$/i.test(socialText) ? 'I’m doing well and ready to help, bro 🙂 What’s on your mind?' : /\b(?:are you there|you there)$/i.test(socialText) ? 'I’m here, bro 🙂 What do you need?' : 'I’m here chatting with you, bro 😄 What are you up to?'
-        : (socialGreeting||socialCombo)
-          ? ((socialCombo&&/(?:haha|lol|hehe|wow)/i.test(socialText))?'Hey bro 😄 what’s up?':'Hey bro 😊 what’s up?')
-          : /^(?:h+m+|hmm+|🤔)/i.test(socialText) ? 'What’s on your mind, bro? 🙂'
-          : /^(?:nice|cool|yay+|👍|😂|❤️|😅)/i.test(socialText) ? '😄'
-          : 'Haha 😄 what’s up, bro?';
-      return {lane:'local',handoff:false,response,provider:'KAI 51 LOCAL · instant social response',model:'local deterministic social path',local:true,localModel:false,sources:[],searchEngines:[],retrievalMs:0};
-    }
+    // Conversation, identity, empathy, and greetings are deliberately NOT answered by
+    // phrase tables. They continue to the selected neural model so KAI can understand
+    // the user's wording and conversation history rather than replay canned text.
     const memoryAction=memoryCommand(prompt);
     if(memoryAction?.type==='remember') return {lane:'local',handoff:false,response:memoryAction.ok?'Got it — I’ll remember that: '+memoryAction.text:'I couldn’t save that memory. Please avoid storing passwords, keys, or other secrets.',provider:'KAI 51 LOCAL · user memory',model:'browser-local memory',local:true,localModel:false,memory:{saved:!!memoryAction.ok,count:readUserMemory().items.length},sources:[]};
     if(memoryAction?.type==='forget') return {lane:'local',handoff:false,response:memoryAction.ok?(memoryAction.removed==='all'?'Done — I cleared KAI’s saved memories for this browser profile.':'Done — I removed '+memoryAction.removed+' matching memory item(s).'):'I couldn’t update saved memory.',provider:'KAI 51 LOCAL · user memory',model:'browser-local memory',local:true,localModel:false,memory:{removed:memoryAction.removed,count:readUserMemory().items.length},sources:[]};
-    const recalled=memoryRecallResponse(prompt);
-    if(recalled) return {lane:'local',handoff:false,response:recalled,provider:'KAI 51 LOCAL · persistent user memory',model:'browser-local memory retrieval',local:true,localModel:false,memory:{count:readUserMemory().items.length},sources:[]};
+    // Memory is supplied as context to the neural model; recall is not a canned answer.
     learnStatedPreference(prompt);
     const memoryContext=userMemoryPrompt();
     hooks.onStage?.('understanding','KAI 51 · LOCAL is understanding the request');
@@ -227,7 +202,7 @@
     const wantsSearch=shouldSearch(prompt);
     let web=null,wiki=[],files=[];
     if(wantsSearch){
-      hooks.onStage?.('searching','KAI 51 · LOCAL is researching with Andi AI, Aelius AI and Wikipedia');
+      hooks.onStage?.('searching','KAI 51 · LOCAL is searching Google, Bing, DuckDuckGo and Wikipedia');
       const [retrieved,knowledge]=await Promise.all([
         searchFast(query,hooks?.signal),
         searchKnowledge(query,hooks?.signal)
@@ -236,31 +211,18 @@
     }
     const sources=[];
     for(const x of (web?.sources||[])){
-      if(x?.text||x?.title)sources.push({title:clean(x.title,220),url:clean(x.url,700),text:clean(x.text,1100),source:x.engine||web.engine||'Google/Bing'});
+      if(x?.text||x?.title)sources.push({title:clean(x.title,220),url:clean(x.url,700),text:clean(x.text,4200),source:x.engine||web.engine||'Google/Bing/DuckDuckGo',readStatus:x.readStatus||'retrieved'});
     }
     for(const x of wiki) if(x?.text)sources.push(x);
     for(const x of files) if(x?.content)sources.push({title:clean(x.title||'HAxBRO Knowledge',220),url:clean(x.url,700),text:clean(x.content,1800),source:'HAxBRO Knowledge'});
     const unique=[];const seen=new Set();
     for(const s of sources){const key=s.url||s.title;if(!key||seen.has(key))continue;seen.add(key);unique.push(s);}
-    ensureActive();hooks.onStage?.('analyzing','KAI 51 · LOCAL is analyzing retrieved evidence');
-    const evidence=unique.slice(0,4).map((s,i)=>'[SOURCE '+(i+1)+'] '+s.source+' — '+s.title+(s.url?' — '+s.url:'')+'\n'+s.text).join('\n\n');
-    hooks.onStage?.('composing','KAI 51 · LOCAL is checking whether retrieved evidence can answer this turn');
-    /* LOCAL is evidence-first: return source-grounded extraction when relevant,
-       otherwise preserve retrieved context for synthesis by the same browser-local
-       neural model. No phrase-response table and no separate provider handoff. */
-    const grounded=evidenceAnswer(query,unique);
-    if(!grounded){
-      const reason=unique.length?'Retrieved evidence needs neural synthesis':'No usable web evidence was retrieved; answer transparently from local model knowledge';
-      const evidencePrompt=memoryContext+(!wantsSearch?'You are KAI 51 LOCAL. Speak naturally and conversationally, using the user memory only when relevant. Answer the user request directly.\n\nUSER REQUEST:\n'+prompt:'You are KAI 51 LOCAL, using the browser-local neural model. Answer naturally, distinguish verified evidence from uncertainty, and cite retrieved sources only when they support the claim. If evidence is missing, say so briefly.\n\nUSER REQUEST:\n'+prompt)+(evidence?'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+evidence:'\n\nNo reliable retrieved evidence was available.');
-      return {lane:'local',handoff:true,research:wantsSearch,reason,evidencePrompt,response:null,provider:'KAI 51 LOCAL · retrieval + neural synthesis',model:'browser-local neural synthesis',local:true,localModel:true,sources:unique.slice(0,4).map(({title,url,source})=>({title,url,source})),searchEngines:[...(web?.engine?[web.engine]:[]),...(wiki.length?['Wikipedia']:[])],retrievalMs:0};
-    }
-    return {
-      lane:'local',handoff:false,response:grounded.response,provider:'KAI 51 LOCAL · evidence synthesis',model:'parallel web retrieval + source-grounded synthesis',
-      local:true,localModel:false,research:wantsSearch,confidence:grounded.confidence,
-      sources:unique.slice(0,4).map(({title,url,source})=>({title,url,source})),
-      searchEngines:[...(web?.engine?[web.engine]:[]),...(wiki.length?['Wikipedia']:[])],
-      retrievalMs:0
-    };
+    ensureActive();hooks.onStage?.('analyzing','KAI 51 · reading and comparing retrieved page evidence');
+    const evidence=unique.slice(0,6).map((s,i)=>'[SOURCE '+(i+1)+'] '+s.source+' — '+s.title+' ['+(s.readStatus||'retrieved')+']'+(s.url?' — '+s.url:'')+'\n'+s.text).join('\n\n');
+    hooks.onStage?.('composing','KAI 51 · neural model is interpreting the source material');
+    const reason=unique.length?'Read source material is ready for neural interpretation':'No usable web evidence was retrieved; disclose the limitation if answering from model knowledge';
+    const evidencePrompt=memoryContext+'You are KAI 51. Respond naturally to the user actual intent. Do not copy source paragraphs or dump links. Read the evidence, identify the main findings, connect related facts, distinguish reported facts from inference, compare disagreements, and explain what the findings mean in your own words. Cite sources inline using [1], [2], etc. only for claims those sources support. If evidence is incomplete or conflicting, say so and do not invent missing facts.\n\nUSER REQUEST:\n'+prompt+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+(evidence||'No reliable retrieved web or knowledge evidence was available.');
+    return {lane:'local',handoff:true,research:wantsSearch,reason,evidencePrompt,response:null,provider:'KAI 51 LOCAL · research + neural reasoning',model:'SmolLM2 local neural synthesis',local:true,localModel:true,sources:unique.slice(0,6).map(({title,url,source,readStatus})=>({title,url,source,readStatus:readStatus||'retrieved'})),searchEngines:[...(web?.engine?[web.engine]:[]),...(wiki.length?['Wikipedia']:[])],retrievalMs:0};
   }
 
   window.HAxBROKaiLocalIntelligence={
