@@ -117,7 +117,7 @@ async function multiSearch(query,mode="fast"){
     const matches=keyTerms.filter(term=>text.includes(term)).length;
     // One generic word (e.g. "causes" or "lithium") must not make an unrelated
     // result look relevant. Require two topic terms whenever the query has two+.
-    const required=keyTerms.length>=4?3:keyTerms.length>=2?2:1;
+    const required=keyTerms.length>=5?3:keyTerms.length>=3?2:1;
     return matches>=required;
   });
   const google=filterRelevant(collect(googleResults,"Google Web",6));

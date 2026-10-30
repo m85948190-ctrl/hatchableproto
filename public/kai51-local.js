@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = 'kai51-unified-controller-v25-360m-primary-evidence-neural-synthesis';
+  const VERSION = 'kai51-unified-controller-v26-360m-primary-live-sources';
   const explicitWebRequest=message=>/\b(?:search (?:the )?(?:web|internet|online)|look up|latest|recent|today|news|price|cost|weather|current version|official source|verify online|check online|find sources|research current)\b/i.test(String(message||''));
   const userScope=()=>{const n=(localStorage.getItem('haxbro_username')||'anonymous-device').trim().toLowerCase().replace(/[^a-z0-9._-]/g,'_').slice(0,64)||'anonymous-device';return n;};
   const KEY = ()=>'haxbro:kai51:'+userScope()+':installation:v15-github-q4';
@@ -40,7 +40,7 @@
     return next;
   };
 
-  const ENGINE_VERSION='kai51-github-360m-q4-v36-primary-neural-synthesis';
+  const ENGINE_VERSION='kai51-github-360m-q4-v37-primary-answer-quality';
   const LOCAL_ENGINE_VERSION='kai51-local-135m-q4-v15-creative-fallback';
   if(window.HAxBROKai51Engine && window.HAxBROKai51Engine.version!==ENGINE_VERSION){
     window.HAxBROKai51Engine=null;
@@ -85,7 +85,7 @@
       :'KAI 51 GITHUB precision model starting'});
 
     const job=(async()=>{
-      const mod=await import('/kai51-local-engine.js?v=76');
+      const mod=await import('/kai51-local-engine.js?v=77');
       const engine=await mod.createKai51Engine({
         profile:isLocal?'local':'github',
         onProgress:p=>emit({profile:'heavy',...p}),
@@ -148,18 +148,7 @@
 
   async function generate(message,history=[],hooks={},profile='local') {
     const signal=hooks?.signal;const ensureActive=()=>{if(signal?.aborted)throw new DOMException('Response stopped by user','AbortError')};ensureActive();
-    if(profile==='largest'){
-      hooks.onStage?.('largest','Starting Google Gemma 3 270M Instruct locally');
-      const mod=await import('/kai51-largest-engine.js?v=15');
-      const engine=await withTimeout(()=>mod.createKai51LargestEngine({
-        onProgress:p=>{try{hooks.onProgress?.(p);emit({...p,profile:'heavy'});}catch{}},
-        onReady:info=>{window.HAxBROKai51GemmaState={status:'ready',installed:true,verified:true,model:info?.model||'onnx-community/gemma-3-270m-it-ONNX',updatedAt:new Date().toISOString()};}
-      }),600000,'Google Gemma 3 270M download/initialization');
-      ensureActive();
-      const result=await withTimeout(()=>engine.generate(message,history,signal),45000,'Google Gemma 3 270M inference');
-      ensureActive();
-      return {...result,lane:'largest'};
-    }
+    if(!['local','github'].includes(profile)) throw new Error('Only the KAI 51 360M and 135M model profiles are supported.');
     const forward=e=>{try{if(e?.detail?.profile==='heavy') hooks.onProgress?.(e.detail);}catch{}};
     window.addEventListener('haxbro:kai-local-progress',forward);
     try{
@@ -180,7 +169,7 @@
               synthesisMessage='USER REQUEST:\n'+message+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+turn.response;
               hooks.onStage?.('synthesizing','KAI 51 '+profile.toUpperCase()+' · neural synthesis with retrieved context');
             }
-          }else if(turn?.handoff&&turn?.evidencePrompt){
+          }else if(turn?.handoff&&turn?.research&&turn?.evidencePrompt){
             synthesisMessage=turn.evidencePrompt;
             hooks.onStage?.('searching','KAI 51 '+profile.toUpperCase()+' · retrieved evidence ready for neural synthesis');
           }
@@ -202,17 +191,12 @@
     const signal=hooks?.signal;
     const ensureActive=()=>{if(signal?.aborted)throw new DOMException('Response stopped by user','AbortError')};
     const preferred=String(hooks?.preferred||'kai-router');
-    const names=hooks?.skipLocal
-      ? (preferred==='kai-largest'?['largest','github','local']:['github','local'])
-      : preferred==='kai-largest'?['largest','github','local']
-      :preferred==='kai-github'?['github','local']
-      :preferred==='kai-local'?['local','github']
-      :['github','local'];
-    const labels={largest:'Google Gemma 3 270M',github:'KAI 51 GitHub 360M',local:'KAI 51 LOCAL'};
+    const names=preferred==='kai-local'?['local','github']:['github','local'];
+    const labels={github:'KAI 51 360M',local:'KAI 51 135M'};
     const errors=[];
     /* Only genuine neural models belong in the answer chain. Retrieval-only KAI Lite
        must never be presented as a conversational model or a final answer. */
-    const timeouts={largest:600000,github:240000,local:120000};
+    const timeouts={github:240000,local:120000};
     const bounded=(promise,ms,label,abortSignal)=>new Promise((resolve,reject)=>{let timer;const cleanup=()=>{clearTimeout(timer);abortSignal?.removeEventListener('abort',onAbort)};const onAbort=()=>{cleanup();reject(new DOMException('Response stopped by user','AbortError'))};timer=setTimeout(()=>{cleanup();reject(new Error(label+' timed out after '+Math.round(ms/1000)+' seconds'))},ms);if(abortSignal){if(abortSignal.aborted)return onAbort();abortSignal.addEventListener('abort',onAbort,{once:true})}Promise.resolve(promise).then(value=>{cleanup();resolve(value)},error=>{cleanup();reject(error)})});
     for(const name of names){
       ensureActive();
@@ -221,7 +205,7 @@
       try{
         let result;
         const run=async()=>{
-          if(name==='largest') return generate(message,history,{signal,onProgress:hooks.onProgress,onStage:hooks.onStage},'largest');
+          /* No third-party model lane: KAI uses only the 360M and 135M models. */
           if(name==='github') return generate(message,history,{signal,onProgress:hooks.onProgress,onStage:hooks.onStage,forceNeural:true},'github');
           if(name==='local') return generate(message,history,{signal,onProgress:hooks.onProgress,onStage:hooks.onStage},'local');
           throw new Error('KAI Lite is a retrieval helper, not a neural answer model; it is excluded from the model fallback chain.');
@@ -293,7 +277,7 @@
       skipLocal:false
     });
     ensureActive();
-    return {...result,combined:true,sources:turn?.sources||result?.sources||[],searchEngines:turn?.searchEngines||result?.searchEngines||[]};
+    return {...result,combined:true,research:!!turn?.research,sources:turn?.sources||result?.sources||[],searchEngines:turn?.searchEngines||result?.searchEngines||[]};
   }
 
   window.HAxBROKai51Bootstrap = {
@@ -322,11 +306,11 @@
     pipelinePromise=(async()=>{
       try{await loadEngine('github');}
       catch(e){console.warn('KAI Router: primary 360M warm-up failed; it can retry on the next request',e);}
-      return {local:!!window.HAxBROKai51LocalFastEngine?.isReady?.(),github:!!window.HAxBROKai51Engine?.isReady?.(),largest:!!window.HAxBROKai51LargestEngine?.isReady?.()};
+      return {local:!!window.HAxBROKai51LocalFastEngine?.isReady?.(),github:!!window.HAxBROKai51Engine?.isReady?.()};
     })().finally(()=>{pipelinePromise=null;});
     return pipelinePromise;
   };
-  window.HAxBROKai51BootstrapPipeline={start:warmPrimaryGithub,status:()=>({local:!!window.HAxBROKai51LocalFastEngine?.isReady?.(),github:!!window.HAxBROKai51Engine?.isReady?.(),largest:!!window.HAxBROKai51LargestEngine?.isReady?.(),running:!!pipelinePromise})};
+  window.HAxBROKai51BootstrapPipeline={start:warmPrimaryGithub,status:()=>({local:!!window.HAxBROKai51LocalFastEngine?.isReady?.(),github:!!window.HAxBROKai51Engine?.isReady?.(),modelCount:2,running:!!pipelinePromise})};
   /* Do not pre-download either model at startup. The 360M primary loads on the
      first chat request; the 135M model is loaded only if that primary attempt fails. */
   setInterval(()=>{

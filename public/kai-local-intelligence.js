@@ -1,7 +1,7 @@
 (() => {
   /* KAI 51 LOCAL: fast evidence retrieval + neural conversation.
      This file routes and gathers evidence; it must not fabricate a response from phrase rules. */
-  const VERSION='kai51-local-evidence-synthesis-v14-compact-360m-context';
+  const VERSION='kai51-local-evidence-synthesis-v15-live-source-results';
   const clean=(v,n=9000)=>String(v??'').replace(/\u0000/g,'').trim().slice(0,n);
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
@@ -203,6 +203,8 @@
     for(const s of sources){const key=s.url||s.title;if(!key||seen.has(key))continue;seen.add(key);unique.push(s);}
     ensureActive();hooks.onStage?.('analyzing','KAI 51 · reading and comparing retrieved page evidence');
     const evidence=unique.slice(0,4).map((s,i)=>'[SOURCE '+(i+1)+'] '+s.source+' — '+s.title+' ['+(s.readStatus||'retrieved')+']'+(s.url?' — '+s.url:'')+'\n'+clean(s.text,1800)).join('\n\n');
+    const visibleSources=unique.slice(0,4).map(({title,url,source,readStatus})=>({title,url,source,readStatus:readStatus||'retrieved'}));
+    hooks.onSources?.(visibleSources);
     const readableSources=unique.filter(s=>s.readStatus==='page-read'||s.readStatus==='wikipedia-article'||s.readStatus==='wikipedia-summary'||s.source==='HAxBRO Knowledge');
     hooks.onStage?.('composing','KAI 51 · neural model is interpreting the source material');
     const reason=readableSources.length?'Read source material is ready for neural interpretation':'No complete readable source was retrieved; KAI must disclose that research could not verify the answer';

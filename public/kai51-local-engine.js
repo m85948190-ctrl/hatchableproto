@@ -6,7 +6,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
   const MODEL=PROFILE==='local'?'onnx-community/SmolLM2-135M-Instruct-ONNX-MHA':'onnx-community/SmolLM2-360M-Instruct-ONNX';
   const MODEL_RELEASE=PROFILE==='local'?'local-fast-135m':'kai51-model-latest';
   const TRAINING_SYNC='/api/kai-training-sync';
-  const VERSION=PROFILE==='local'?'kai51-local-135m-q4-v15-creative-fallback':'kai51-github-360m-q4-v36-primary-neural-synthesis';
+  const VERSION=PROFILE==='local'?'kai51-local-135m-q4-v15-creative-fallback':'kai51-github-360m-q4-v37-primary-answer-quality';
   const MODEL_ASSETS=new Set([
     'config.json',
     'generation_config.json',
@@ -227,20 +227,20 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     const capability=!appAnalysis&&/\b(?:app|application|calculator|chatbot|dashboard|website|web\s*app|build|publish|export)\b/i.test(userRequest)?'app-maker':'general';
     if(appAnalysis) generationOptions.max_new_tokens=96;
     else if(capability==='app-maker') generationOptions.max_new_tokens=PROFILE==='local'?768:1536;
-    else if(hasResearchEvidence) generationOptions.max_new_tokens=PROFILE==='local'?220:320;
+    else if(hasResearchEvidence){generationOptions.max_new_tokens=PROFILE==='local'?240:420;generationOptions.do_sample=true;generationOptions.temperature=0.25;generationOptions.top_p=0.9;}
     const rules=(trainingPack?.rules||[])
       .filter(x=>x&&x.rule)
       .filter(x=>x.capability==='general' || x.capability===capability)
       .filter(x=>x.id!=='creator')
-      .slice(0,PROFILE==='local'?3:16)
+      .slice(0,PROFILE==='local'?3:4)
       .map(x=>'- '+x.rule)
       .join('\n');
     const examples=(trainingPack?.examples||[])
       .filter(x=>x&&(!x.capability||x.capability===capability))
-      .slice(0,PROFILE==='local'?0:3)
+      .slice(0,hasResearchEvidence?0:PROFILE==='local'?0:2)
       .map(x=>'EXAMPLE REQUEST: '+String(x.prompt||'')+'\nCONTRACT: '+String(x.response_contract||''))
       .join('\n');
-    const conditioning=isSmallTalk?'':[rules?'Relevant HATCHABLE KAI 51 BEHAVIOR RULES:\n'+rules:'',examples?'Relevant HATCHABLE KAI 51 EXAMPLES:\n'+examples:''].filter(Boolean).join('\n\n');
+    const conditioning=(isSmallTalk||hasResearchEvidence)?'':[rules?'Relevant HATCHABLE KAI 51 BEHAVIOR RULES:\n'+rules:'',examples?'Relevant HATCHABLE KAI 51 EXAMPLES:\n'+examples:''].filter(Boolean).join('\n\n');
     // Keep recent dialogue for EVERY turn, including greetings and emotional/casual messages.
     // This lets the model understand the flow instead of treating each message as a fresh task.
     const normalizedHistory=(Array.isArray(history)?history:[])
@@ -294,11 +294,12 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     const sentences=response.split(/(?<=[.!?])\s+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
     const repeatedSentence=sentences.length>=2&&new Set(sentences).size<=Math.max(1,Math.floor(sentences.length/2));
     const apologyLoop=(response.match(/i'?m sorry for the misunderstanding/gi)||[]).length>=2;
+    const genericApology=/^(?:i apologize for not providing (?:any )?direct answers|as a conversational ai\b|i apologize for not answering\b)/i.test(response.trim());
     // A truncated answer is a recoverable draft failure too. Retry it before the final
     // guard can replace it with the generic fallback message.
     const draftUnfinishedTail=/\b(?:a|an|the|and|or|but|because|that|which|who|to|of|for|with|had|have|has|is|are|was|were|in|on|at|by|from|if|when|while|as|my|your|you|i|it)$/i.test(response.trim());
     const draftBrokenOutput=draftUnfinishedTail||(response.length>100&&!/[.!?…\])\"’]$/.test(response.trim()));
-    if(offTopicGreeting||genericGreeting||echoedPrompt||metaSummary||repeatedSentence||apologyLoop||draftBrokenOutput){
+    if(offTopicGreeting||genericGreeting||echoedPrompt||metaSummary||repeatedSentence||apologyLoop||genericApology||draftBrokenOutput){
       const repairMessages=[
         {role:'system',content:isSmallTalk
           ?'You are KAI 51. Your last response was irrelevant or repetitive. Respond to the user’s actual short message with one warm, simple sentence. Do not mention weather unless asked. Do not apologize unless there was a real mistake. Never repeat a sentence.'
@@ -316,6 +317,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
         if(repaired)response=repaired;
       }catch(error){console.warn('KAI 51 answer-repair retry failed',error);}
     }
+    if(/^(?:i apologize for not providing (?:any )?direct answers|as a conversational ai\b|i apologize for not answering\b)/i.test(response.trim())) throw new Error('Primary model produced a generic non-answer; activating the 135M fallback.');
     // Final safety guard: never expose a loop or an irrelevant weather answer for small talk.
     const finalSentences=response.split(/(?<=[.!?])\s+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
     const stillRepeating=finalSentences.length>=2&&(new Set(finalSentences).size<finalSentences.length||new Set(finalSentences).size<=Math.max(1,Math.floor(finalSentences.length/2)));
