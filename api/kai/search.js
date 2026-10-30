@@ -24,26 +24,19 @@ function extractLinks(html){
 const pageText=html=>clean(String(html||"").replace(/<(script|style|noscript|svg|nav|header|footer|aside)\b[\s\S]*?<\/\1>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,"<").replace(/&gt;/gi,">"),9000);
 
 async function googleSearch(query){
+  // Google's current public HTML response is JS-only in this server environment;
+  // do not pretend its empty shell is a set of search results.
   const url="https://www.google.com/search?gbv=1&hl=en&q="+encodeURIComponent(query);
-  return browser.session(async page=>{
-    await page.goto(url,{waitUntil:"domcontentloaded"});
-    return await page.evaluate(()=>{
-      const out=[];const seen=new Set();
-      for(const a of Array.from(document.querySelectorAll('a'))){
-        const href=a.href||'',title=(a.innerText||a.textContent||'').replace(/\\s+/g,' ').trim();
-        if(!href.startsWith('http://')&&!href.startsWith('https://'))continue;
-        let host='';try{host=new URL(href).hostname}catch{continue}
-        if(host.includes('google.'))continue;
-        if(!title||seen.has(href))continue;
-        seen.add(href);
-        const block=a.closest('div.MjjYud')||a.parentElement?.parentElement||a.parentElement;
-        const text=(block?.innerText||block?.textContent||'').replace(/\\s+/g,' ').trim().slice(0,1400);
-        out.push({title,url:href,text});
-        if(out.length>=6)break;
-      }
-      return out;
-    });
-  });
+  const response=await fetch(url,{headers:{"user-agent":"Mozilla/5.0 (compatible; HAxBROResearch/1.0)"}});
+  if(!response.ok)return [];
+  const html=await response.text();
+  if(/\/httpservice\/retry\/enablejs|unusual traffic|sorry\/index/i.test(html))return [];
+  const blocks=html.match(/<div class=["']MjjYud["'][\s\S]*?(?=<div class=["']MjjYud["']|<\/body>)/gi)||[];
+  return blocks.slice(0,6).map(block=>{
+    const anchor=block.match(/<a[^>]+href=["']([^"']+)["'][^>]*>[\s\S]*?<h3[^>]*>([\s\S]*?)<\/h3>/i);
+    if(!anchor)return null;
+    return {title:htmlText(anchor[2]),url:anchor[1],text:htmlText(block)};
+  }).filter(x=>x?.title&&/^https?:/i.test(x.url));
 }
 
 function queryVariants(query){
@@ -79,7 +72,9 @@ function htmlText(value){
 }
 async function bingSearch(query){
   const url="https://www.bing.com/search?q="+encodeURIComponent(query);
-  const html=await browser.html(url);
+  const response=await fetch(url,{headers:{"user-agent":"Mozilla/5.0 (compatible; HAxBROResearch/1.0)"}});
+  if(!response.ok)throw new Error("Bing search HTTP "+response.status);
+  const html=await response.text();
   const blocks=String(html||"").match(/<li\s+class=["'][^"']*b_algo[^"']*["'][\s\S]*?(?=<li\s+class=["'][^"']*b_algo[^"']*["']|<\/ol>)/gi)||[];
   const out=[];const seen=new Set();
   for(const block of blocks){
@@ -102,7 +97,7 @@ async function multiSearch(query,mode="fast"){
   const primary=variants.slice(0,mode==="deep"?3:1);
   // Run three independent public search engines in parallel. A failure in one
   // engine must not suppress results from the others.
-  const deadline=mode==="deep"?18000:14000;
+  const deadline=mode==="deep"?12000:6000;
   const settled=await Promise.race([
     Promise.all([
       Promise.all(primary.map(async q=>{try{return await googleSearch(q)}catch{return []}})),
@@ -121,13 +116,21 @@ async function multiSearch(query,mode="fast"){
   for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length);i++){
     for(const x of [google[i],bing[i],duckduckgo[i]])if(x&&!seen.has(x.url)){seen.add(x.url);merged.push(x);}
   }
-  return {links:merged.slice(0,mode==="deep"?15:12),engine:"Google + Bing + DuckDuckGo",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length}};
+  return {links:merged.slice(0,mode==="deep"?15:12),engine:[google.length?"Google Web":"",bing.length?"Bing Web":"",duckduckgo.length?"DuckDuckGo Instant Answers":""].filter(Boolean).join(" + ")||"No web search engine returned results",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length}};
 }
 
 async function ddgSearch(query){
-  const sr=await fetch("https://html.duckduckgo.com/html/?q="+encodeURIComponent(query),{headers:{"user-agent":"Mozilla/5.0 HAxBRO-KAI-Web"}});
-  if(!sr.ok)throw new Error("fallback search HTTP "+sr.status);
-  return extractLinks(await sr.text()).slice(0,6);
+  // The HTML results page is presenting a human-verification challenge. Use the
+  // official Instant Answer endpoint instead; it returns a smaller, honest data set.
+  const url="https://api.duckduckgo.com/?q="+encodeURIComponent(query)+"&format=json&no_html=1&skip_disambig=1";
+  const response=await fetch(url,{headers:{accept:"application/json"}});
+  if(!response.ok)throw new Error("DuckDuckGo Instant Answer HTTP "+response.status);
+  const data=await response.json();
+  const out=[];
+  if(data.AbstractText&&data.AbstractURL)out.push({title:data.Heading||data.AbstractSource||"DuckDuckGo instant answer",url:data.AbstractURL,text:clean(data.AbstractText,1600)});
+  const addTopics=(items)=>{for(const item of items||[]){if(item?.FirstURL&&item?.Text)out.push({title:clean(item.Text.split(" - ")[0],180),url:item.FirstURL,text:clean(item.Text,900)});if(item?.Topics)addTopics(item.Topics);if(out.length>=6)break;}};
+  addTopics(data.RelatedTopics);
+  return out.slice(0,6);
 }
 
 async function wikipediaEvidence(query){
