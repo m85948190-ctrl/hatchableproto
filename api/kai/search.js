@@ -61,26 +61,40 @@ function queryVariants(query){
   ];
 }
 
+function decodeBingTarget(href){
+  const value=String(href||"").replace(/&amp;/g,"&");
+  const match=value.match(/[?&]u=a1([A-Za-z0-9_=-]+)/);
+  if(match){
+    try{
+      const binary=atob(match[1].replace(/-/g,"+").replace(/_/g,"/"));
+      const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+      const decoded=new TextDecoder().decode(bytes);
+      if(/^https?:\/\//i.test(decoded))return decoded;
+    }catch{}
+  }
+  try{const u=new URL(value);if(u.hostname.endsWith("bing.com"))return "";return u.href;}catch{return "";}
+}
+function htmlText(value){
+  return clean(String(value||"").replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,"<").replace(/&gt;/gi,">"),1400);
+}
 async function bingSearch(query){
   const url="https://www.bing.com/search?q="+encodeURIComponent(query);
-  return browser.session(async page=>{
-    await page.goto(url,{waitUntil:"domcontentloaded"});
-    return await page.evaluate(()=>{
-      const out=[];const seen=new Set();
-      for(const a of Array.from(document.querySelectorAll("li.b_algo h2 a, h2 a"))){
-        const href=a.href||"",title=(a.innerText||a.textContent||"").replace(/\\s+/g," ").trim();
-        if((!href.startsWith("http://")&&!href.startsWith("https://"))||!title||seen.has(href))continue;
-        let host="";try{host=new URL(href).hostname}catch{continue}
-        if(host.includes("bing.com"))continue;
-        seen.add(href);
-        const block=a.closest("li.b_algo")||a.parentElement?.parentElement||a.parentElement;
-        const text=(block?.innerText||block?.textContent||"").replace(/\\s+/g," ").trim().slice(0,1400);
-        out.push({title,url:href,text});
-        if(out.length>=8)break;
-      }
-      return out;
-    });
-  });
+  const html=await browser.html(url);
+  const blocks=String(html||"").match(/<li\s+class=["'][^"']*b_algo[^"']*["'][\s\S]*?(?=<li\s+class=["'][^"']*b_algo[^"']*["']|<\/ol>)/gi)||[];
+  const out=[];const seen=new Set();
+  for(const block of blocks){
+    const anchor=block.match(/<h2[^>]*>\s*<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/h2>/i);
+    if(!anchor)continue;
+    const target=decodeBingTarget(anchor[1]);
+    const title=htmlText(anchor[2]);
+    if(!target||!title||seen.has(target))continue;
+    seen.add(target);
+    const paragraph=block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+    const text=paragraph?htmlText(paragraph[1]):"";
+    out.push({title,url:target,text});
+    if(out.length>=8)break;
+  }
+  return out;
 }
 
 async function multiSearch(query,mode="fast"){
@@ -88,7 +102,7 @@ async function multiSearch(query,mode="fast"){
   const primary=variants.slice(0,mode==="deep"?3:1);
   // Run three independent public search engines in parallel. A failure in one
   // engine must not suppress results from the others.
-  const deadline=mode==="deep"?9000:5000;
+  const deadline=mode==="deep"?18000:14000;
   const settled=await Promise.race([
     Promise.all([
       Promise.all(primary.map(async q=>{try{return await googleSearch(q)}catch{return []}})),
@@ -117,7 +131,7 @@ async function ddgSearch(query){
 }
 
 async function wikipediaEvidence(query){
-  const normalized=clean(query,300).replace(/^\s*(?:please\s+)?(?:what is|what are|who is|who are|where is|where are|tell me about|explain)\s+/i,"").replace(/[?!.]+$/,"").trim();
+  const normalized=clean(query,300).replace(/^\s*(?:please\s+)?(?:what is|what are|who is|who are|where is|where are|tell me about|explain)\s+/i,"").replace(/\b(?:and|how|does|do|is|are|it|they|this|that|the|a|an|work|works|function|functions)\b/gi," ").replace(/[?!.]+$/,"").replace(/\s+/g," ").trim();
   const fetchSummary=async(title,timeout=1350)=>{
     const normalizedTitle=title.replace(/\s+/g,"_");
     const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeout);
