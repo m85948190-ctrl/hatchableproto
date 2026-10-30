@@ -108,9 +108,13 @@ async function multiSearch(query,mode="fast"){
   ]);
   const [googleResults,bingResults,ddgResults]=settled||[[],[],[]];
   const collect=(lists,engine,limit)=>{const out=[],seen=new Set();for(const list of lists||[])for(const x of list||[]){if(!x?.url||seen.has(x.url))continue;seen.add(x.url);out.push({...x,engine});if(out.length>=limit)return out;}return out;};
-  const google=collect(googleResults,"Google Web",6);
-  const bing=collect(bingResults,"Bing Web",6);
-  const duckduckgo=collect(ddgResults,"DuckDuckGo Web",6);
+  const terms=clean(query,500).toLowerCase().match(/[a-z0-9]{4,}/g)||[];
+  const stop=new Set(["what","when","where","which","that","this","with","from","does","have","your","about","into","they","them","their","there","then","than","were","will","would","could","should","also","just","some","more","most","much","many","make","made","work","works","using","used","based","explain","please","tell","show"]);
+  const keyTerms=[...new Set(terms.filter(t=>!stop.has(t)))];
+  const filterRelevant=rows=>rows.filter(x=>{if(!keyTerms.length)return true;const text=(x.title+" "+x.text).toLowerCase();return keyTerms.some(term=>text.includes(term));});
+  const google=filterRelevant(collect(googleResults,"Google Web",6));
+  const bing=filterRelevant(collect(bingResults,"Bing Web",6));
+  const duckduckgo=filterRelevant(collect(ddgResults,"DuckDuckGo Instant Answers",6));
   const merged=[],seen=new Set();
   // Interleave providers so one engine cannot monopolize the evidence set.
   for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length);i++){
