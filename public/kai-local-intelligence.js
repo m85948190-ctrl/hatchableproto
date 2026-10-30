@@ -1,7 +1,7 @@
 (() => {
   /* KAI 51 LOCAL: fast evidence retrieval + neural conversation.
      This file routes and gathers evidence; it must not fabricate a response from phrase rules. */
-  const VERSION='kai51-local-evidence-synthesis-v12-conversation-fallbacks';
+  const VERSION='kai51-local-evidence-synthesis-v13-neural-conversation-research';
   const clean=(v,n=9000)=>String(v??'').replace(/\u0000/g,'').trim().slice(0,n);
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
@@ -27,35 +27,8 @@
   function memoryCommand(message){const t=clean(message,800);let m=t.match(/^\s*(?:please\s+)?remember(?:\s+that)?\s*[:,-]?\s*(.+)$/i);if(m){const ok=rememberUser(m[1],'explicit');return {type:'remember',ok,text:clean(m[1],400)};}m=t.match(/^\s*(?:please\s+)?forget(?:\s+(?:that|about))?\s+(.+)$/i);if(m)return {type:'forget',...forgetUserMemory(m[1])};if(/^\s*(?:forget everything|forget all my memories|clear (?:my )?memory)\s*[.!]?\s*$/i.test(t))return {type:'forget',...forgetUserMemory()};return null;}
   function learnStatedPreference(message){const t=clean(message,700);const patterns=[/\bmy name is ([^.!?]{1,80})/i,/\bcall me ([^.!?]{1,80})/i,/\bi prefer ([^.!?]{1,180})/i,/\bi like ([^.!?]{1,160})/i,/\bi am building ([^.!?]{1,160})/i,/\bi'm building ([^.!?]{1,160})/i,/\bI work on ([^.!?]{1,160})/i];for(const re of patterns){const m=t.match(re);if(m){rememberUser(m[0],'stated-preference');break;}}}
   function userMemoryPrompt(){const items=readUserMemory().items;if(!items.length)return '';return 'USER MEMORY (persistent on this browser profile; treat as helpful context, not unquestionable truth):\n'+items.slice(-20).map(i=>'- '+i.text).join('\n')+'\nUse this naturally when relevant. Do not claim to remember anything absent from this list.\n\n';}
-  function memoryRecallResponse(message){const t=clean(message,500).toLowerCase();if(!(/\bwhat\b.*\b(?:prefer|like|remember|know about me|my name|my preferences?)\b/i.test(t)||/\bwhat do you remember about me\b/i.test(t)||/\bwhat have i told you about me\b/i.test(t)))return null;const items=readUserMemory().items;if(!items.length)return 'I don’t have any saved memories for this browser profile yet. You can tell me “Remember that …” to save something.';const prefs=items.map(i=>i.text);return 'Here’s what I remember from this browser profile:\n'+prefs.map(x=>'- '+x).join('\n');}
-  function evidenceAnswer(question,sources){
-    const terms=[...new Set(words(question).filter(w=>w.length>2&&!STOP_WORDS.has(w)))];
-    if(!terms.length)return null;
-    const ranked=[];
-    for(const source of sources){
-      const title=clean(source.title,300).toLowerCase();
-      const body=clean(source.text,2400).replace(/\s+/g,' ');
-      if(body.length<45)continue;
-      const normalized=(title+' '+body).toLowerCase();
-      const hits=terms.filter(t=>normalized.includes(t));
-      const titleHits=terms.filter(t=>title.includes(t));
-      const score=hits.length+titleHits.length*2;
-      if(score<Math.min(3,Math.max(2,terms.length)))continue;
-      const sentences=body.split(/(?<=[.!?])\s+/).map(s=>s.trim()).filter(s=>s.length>=35&&s.length<=500);
-      const picked=sentences.map(sentence=>{
-        const lower=sentence.toLowerCase();
-        const matched=terms.filter(t=>lower.includes(t)).length;
-        return {sentence,score:matched};
-      }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,2);
-      if(picked.length)ranked.push({source,score,sentences:picked.map(x=>x.sentence)});
-    }
-    ranked.sort((a,b)=>b.score-a.score);
-    const best=ranked[0];
-    if(!best)return null;
-    const answer=best.sentences.join(' ');
-    if(answer.length<45)return null;
-    return {response:answer+'\n\nSource: '+best.source.title+' — '+best.source.url,source:best.source,confidence:best.score};
-  }
+  // Conversational memory recall is handled by the neural model using userMemoryPrompt().
+  // Source extraction is not a final answer: the retrieved evidence always goes to the neural synthesizer.
 
   function shouldSearch(message){
     const t=clean(message).toLowerCase();

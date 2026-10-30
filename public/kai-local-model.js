@@ -13,8 +13,8 @@
     if(st.ready&&window.HAxBROKai51Bootstrap?.generate){
       return window.HAxBROKai51Bootstrap.generate(prompt,history);
     }
-    const lite=await window.HAxBROKaiLite?.respond?.(prompt,history);
-    return lite?.response?lite:null;
+    // Never substitute the retrieval-only KAI Lite endpoint for a neural answer.
+    return null;
   };
   window.HAxBROLocalKai={
     start:prepare,prepare,generate:respond,respond,

@@ -279,6 +279,7 @@ export default async function(req, res) {
   res.setHeader("Access-Control-Max-Age", "86400");
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).json({ error: "POST required" });
+  return res.status(410).json({ok:false,error:"KAI Lite was a retrieval-only/extractive lane, not a neural answer model. Use the KAI 51 neural runtime."});
 
   const query = clean(req.body?.message, 1800);
   if (!query) return res.status(400).json({ error: "message required" });

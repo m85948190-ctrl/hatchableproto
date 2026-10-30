@@ -203,15 +203,16 @@
     const ensureActive=()=>{if(signal?.aborted)throw new DOMException('Response stopped by user','AbortError')};
     const preferred=String(hooks?.preferred||'kai-router');
     const names=hooks?.skipLocal
-      ? (preferred==='kai-largest'?['largest','github','local','lite']:['github','largest','lite'])
-      : preferred==='kai-largest'?['largest','github','local','lite']
-      :preferred==='kai-github'?['github','local','largest','lite']
-      :preferred==='kai-local'?['local','github','largest','lite']
-      :['local','github','largest','lite'];
-    const labels={largest:'Google Gemma 3 270M',github:'KAI 51 GitHub 360M',local:'KAI 51 LOCAL',lite:'KAI Lite'};
+      ? (preferred==='kai-largest'?['largest','github','local']:['github','largest'])
+      : preferred==='kai-largest'?['largest','github','local']
+      :preferred==='kai-github'?['github','local','largest']
+      :preferred==='kai-local'?['local','github','largest']
+      :['local','github','largest'];
+    const labels={largest:'Google Gemma 3 270M',github:'KAI 51 GitHub 360M',local:'KAI 51 LOCAL'};
     const errors=[];
-    /* Keep request latency bounded while the optional Google Gemma 3 1B model downloads on first use. */
-    const timeouts={largest:600000,github:240000,local:60000,lite:15000};
+    /* Only genuine neural models belong in the answer chain. Retrieval-only KAI Lite
+       must never be presented as a conversational model or a final answer. */
+    const timeouts={largest:600000,github:240000,local:60000};
     const bounded=(promise,ms,label,abortSignal)=>new Promise((resolve,reject)=>{let timer;const cleanup=()=>{clearTimeout(timer);abortSignal?.removeEventListener('abort',onAbort)};const onAbort=()=>{cleanup();reject(new DOMException('Response stopped by user','AbortError'))};timer=setTimeout(()=>{cleanup();reject(new Error(label+' timed out after '+Math.round(ms/1000)+' seconds'))},ms);if(abortSignal){if(abortSignal.aborted)return onAbort();abortSignal.addEventListener('abort',onAbort,{once:true})}Promise.resolve(promise).then(value=>{cleanup();resolve(value)},error=>{cleanup();reject(error)})});
     for(const name of names){
       ensureActive();
@@ -223,9 +224,7 @@
           if(name==='largest') return generate(message,history,{signal,onProgress:hooks.onProgress,onStage:hooks.onStage},'largest');
           if(name==='github') return generate(message,history,{signal,onProgress:hooks.onProgress,onStage:hooks.onStage,forceNeural:true},'github');
           if(name==='local') return generate(message,history,{signal,onProgress:hooks.onProgress,onStage:hooks.onStage},'local');
-          const lite=window.HAxBROKaiLite;
-          if(!lite?.respond) throw new Error('KAI Lite runtime is unavailable');
-          return lite.respond(message,history,{signal});
+          throw new Error('KAI Lite is a retrieval helper, not a neural answer model; it is excluded from the model fallback chain.');
         };
         result=await bounded(run(),timeouts[name],label,signal);
         ensureActive();

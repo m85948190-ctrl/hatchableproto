@@ -1,11 +1,6 @@
 (() => {
-  async function respond(prompt,history=[],options={}){
-    const q=String(prompt||'').trim();
-    if(!q)return null;
-    const r=await fetch('/api/kai-lite',{method:'POST',headers:{'Content-Type':'application/json'},signal:options?.signal,body:JSON.stringify({message:q,history})});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok||!d.ok||!d.response)return null;
-    return d;
-  }
-  window.HAxBROKaiLite={respond,status:()=>({ready:true,model:'KAI LITE · WEB',web:true})};
+  // KAI Lite was a retrieval/extractive response lane, not a neural language model.
+  // It is intentionally disabled as an answer provider so it cannot replace KAI 51.
+  async function respond(){return null;}
+  window.HAxBROKaiLite={respond,status:()=>({ready:false,model:'KAI Lite retrieval-only · disabled as answer lane',web:false})};
 })();

@@ -241,22 +241,10 @@ function showAppPlatformChoices(value){
     {icon:'📱',label:'Mobile App',detail:'Mobile-first application experience',onClick:async()=>{if(window.HAxBROFutureMaker?.open){await window.HAxBROFutureMaker.open(value+'\n\nSELECTED PLATFORM: Mobile App',true)}else window.dispatchEvent(new CustomEvent('haxbro:open-app-maker',{detail:{prompt:value+'\n\nSELECTED PLATFORM: Mobile App',autoBuild:true}}));}}
   ]);
 }
-async function sendChat(text,opts={}){let value=String(text||'').trim();const attachedImage=window.HAxBROPendingImage||null;if(!value&&!attachedImage)return false;if(attachedImage&&!value)value='Please analyze the attached image in detail.';if(sendInFlight&&!opts.internalRetry)return true;const now=Date.now();if(value===lastSendValue&&now-lastSendAt<5000&&!opts.internalRetry)return true;const attemptId=opts.internalRetry?sendAttemptId:sendAttemptId+1;if(!opts.internalRetry){sendAttemptId=attemptId;activeChatController=new AbortController();window.HAxBROActiveChatSignal=activeChatController.signal;clearTimeout(sendWatchdogTimer);sendInFlight=true;lastSendValue=value;lastSendAt=now;const watchdogMs=window.HAxBROSelectedModel==='kai-largest'?600000:window.HAxBROSelectedModel==='kai-lite'?12000:360000;sendWatchdogTimer=setTimeout(()=>{if(sendInFlight&&sendAttemptId===attemptId){try{activeChatController?.abort()}catch{}try{activeRealtimeClient?.close?.()}catch{}try{activeStreamReader?.cancel?.()}catch{}sendInFlight=false;setBusy(false);addMessage('KAI did not finish within '+Math.round(watchdogMs/1000)+' seconds. The selected model run was stopped; no web-only substitute was used. You can retry or check the selected model.','bot');}},watchdogMs)}if(await checkAdmin69(value)){sendInFlight=false;return true}ensureChat();
-/* Explicit model picker: KAI 51 LOCAL, KAI 51 GITHUB, or KAI LITE. */
-if(!opts.internalRetry&&window.HAxBROSelectedModel==='kai-lite'&&window.HAxBROKaiLite?.respond){
-  addMessage(value,'user');updateKaiMemory(value);if(input){input.value='';resize();}
-  try{
-    setBusy(true,'light');kaiActivityStart('light');kaiActivityStep('lite','KAI LITE · selected','Using the lightweight web intelligence lane','','running');
-    const lite=await withChatTimeout(()=>window.HAxBROKaiLite.respond(value,active()?.items?.slice(-12)||[],{signal:activeChatController?.signal}),12000,'KAI LITE selected lane');
-    if(lite?.response){kaiActivitySet('lite','done','KAI LITE response delivered');kaiActivityFinish(lite);addMessage(lite.response,'bot');return true;}
-    throw new Error('KAI LITE returned no response');
-  }catch(e){addMessage('KAI LITE could not complete this turn. Select KAI 51 LOCAL or KAI 51 GITHUB to continue.','bot');return true}
-  finally{setBusy(false);sendInFlight=false;}
-}
+async function sendChat(text,opts={}){let value=String(text||'').trim();const attachedImage=window.HAxBROPendingImage||null;if(!value&&!attachedImage)return false;if(attachedImage&&!value)value='Please analyze the attached image in detail.';if(sendInFlight&&!opts.internalRetry)return true;const savedModelChoice=localStorage.getItem(haxbroUserKey('model_choice'));if(window.HAxBROSelectedModel==='kai-lite'||savedModelChoice==='kai-lite'){window.HAxBROSelectedModel='kai-router';localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}const now=Date.now();if(value===lastSendValue&&now-lastSendAt<5000&&!opts.internalRetry)return true;const attemptId=opts.internalRetry?sendAttemptId:sendAttemptId+1;if(!opts.internalRetry){sendAttemptId=attemptId;activeChatController=new AbortController();window.HAxBROActiveChatSignal=activeChatController.signal;clearTimeout(sendWatchdogTimer);sendInFlight=true;lastSendValue=value;lastSendAt=now;const watchdogMs=window.HAxBROSelectedModel==='kai-largest'?600000:360000;sendWatchdogTimer=setTimeout(()=>{if(sendInFlight&&sendAttemptId===attemptId){try{activeChatController?.abort()}catch{}try{activeRealtimeClient?.close?.()}catch{}try{activeStreamReader?.cancel?.()}catch{}sendInFlight=false;setBusy(false);addMessage('KAI did not finish within '+Math.round(watchdogMs/1000)+' seconds. The selected model run was stopped; no web-only substitute was used. You can retry or check the selected model.','bot');}},watchdogMs)}if(await checkAdmin69(value)){sendInFlight=false;return true}ensureChat();
+/* Legacy KAI LITE selections are normalized to the real KAI neural router above. */
 /* No hard-coded creator/identity response. Every normal question is handled by the selected KAI intelligence/fallback chain. */
-if(!opts.fromChoice&&!overdrive&&(window.HAxBROSelectedModel||localStorage.getItem(haxbroUserKey('model_choice'))||'kai-local')==='kai-lite'&&kaiChoiceSearchLike(value)){
-  addMessage(value,'user');updateKaiMemory(value);if(input)input.value='';resize();showSearchChoices(value);sendInFlight=false;return true;
-}
+/* Legacy KAI LITE model selection is no longer routed to a search-only answer. */
 if(!opts.fromChoice&&!overdrive&&value.length>0&&!kaiChoiceSearchLike(value)&&/\b(?:what|who|when|where|why|how|which|can|does|do|is|are|explain|define|meaning|latest|recent|news|search|find|look\s*(?:up|for)|price|cost|weather|version|release|update)\b/i.test(value)){
   opts.searchMode='quick';
 }
@@ -290,17 +278,19 @@ if(input)input.value='';resize();try{if(!overdrive){
           const runtimeState=window.HAxBROKai51Bootstrap?.state?.()||{};if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
           /* Never substitute KAI LITE just because a neural model is not ready. Start the selected KAI 51 lane and let its bounded model loader report real progress/failure. */
           if(activeChatController?.signal.aborted)throw new DOMException('Response stopped by user','AbortError');
-          if(['kai-router','kai-local','kai-github','kai-largest'].includes(selectedModel)){
+          if(selectedModel==='kai-router'){
             kaiActivitySet('thinking','done');
             const selectedLabel=selectedModel==='kai-largest'?'KAI 51 · Google Gemma 3 270M':selectedModel==='kai-github'?'KAI 51 GitHub 360M':selectedModel==='kai-local'?'KAI 51 LOCAL':'KAI Router · automatic selection';
             mark('router',selectedLabel,'Try the selected model first; if it fails or returns no usable answer, automatically try the backup chain.','running');
-            result=await window.HAxBROKai51Bootstrap?.routerGenerate?.(value,history,{
-              preferred:selectedModel,
+            result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
               signal:activeChatController?.signal,
               onStage:(stage,detail)=>{
-                const key=stage==='router-fallback'?'router-fallback':'router';
-                mark(key,selectedLabel,detail||'Trying the selected model and ordered backups','running');
-              }
+                const labels={searching:'Searching Google, Bing, DuckDuckGo and Wikipedia',analyzing:'Reading and comparing source pages',composing:'KAI is reasoning over the gathered evidence','local-neural':'Running KAI 51 LOCAL neural model','local-neural-progress':'Loading KAI 51 LOCAL weights',github:'Using KAI 51 GitHub neural backup','router-fallback':'Switching to the next genuine neural model'};
+                const keys={searching:'searching',analyzing:'analyzing',composing:'composing','local-neural':'local-neural','local-neural-progress':'local-neural-progress',github:'github','router-fallback':'router-fallback'};
+                const key=keys[stage]||'router';
+                mark(key,labels[stage]||selectedLabel,detail||'Processing this stage','running');
+              },
+              onHandoff:reason=>mark('github','KAI 51 GitHub neural backup',reason||'Local model needs the next neural lane','running')
             });
           }else if(selectedModel==='kai-local'){
             kaiActivitySet('thinking','done');
@@ -468,46 +458,14 @@ if(input)input.value='';resize();try{if(!overdrive){
           }catch(managedError){
             console.warn('KAI 51 managed recovery failed; KAI Lite is now the final emergency fallback',managedError);
           }
-          if(window.HAxBROKaiLite?.respond){
-            try{
-              kaiActivityStart('light');
-              kaiActivityStep('lite','KAI Lite · emergency fallback','KAI 51 execution lanes were unavailable; using the emergency recovery lane','','running');
-              const recovery=await window.HAxBROKaiLite.respond(value,active()?.items?.slice(-12)||[]);
-              if(recovery?.response){
-                kaiActivitySet('lite','done','Emergency response delivered');
-                kaiActivityFinish(recovery);
-                addMessage(recovery.response,'bot');
-                return true;
-              }
-            }catch(fallbackError){ console.warn('KAI Lite emergency fallback also failed',fallbackError); }
-          }
+          // No rule-based or web-snippet answer is substituted when neural lanes fail.
           addMessage('KAI 51 could not complete this turn. Please retry once.','bot');
           return true;
         }
       }
       if(!kai51Verified&&!opts.fromChoice){
-        /* KAI Lite is the working bridge while the real KAI 51 neural package is
-           downloading/restoring. Do NOT block the user on a 386MB browser model.
-           The real model continues loading in the background and automatically
-           takes over once verified. */
-        try{
-          window.HAxBROKai51Bootstrap?.prepare?.().catch(e=>console.warn('KAI 51 background download retry',e));
-        }catch{}
-        if(window.HAxBROKaiLite?.respond){
-          try{
-            setBusy(true,'light');
-            kaiActivityStart('light');
-            kaiActivityStep('lite','KAI Lite · active bridge','KAI 51 real model is downloading; KAI Lite is handling this turn','','running');
-            const recovery=await window.HAxBROKaiLite.respond(value,active()?.items?.slice(-12)||[]);
-            if(recovery?.response){
-              kaiActivitySet('lite','done','KAI Lite response delivered');
-              kaiActivityFinish(recovery);
-              addMessage(recovery.response,'bot');
-              return true;
-            }
-          }catch(e){ console.warn('KAI Lite bridge failed while KAI 51 loads',e); }
-        }
-        /* If Lite itself is unavailable, allow the existing managed lane below. */
+        // Initialize the real local neural model; never substitute KAI Lite canned/extractive replies.
+        try{window.HAxBROKai51Bootstrap?.prepare?.().catch(e=>console.warn('KAI 51 local initialization',e));}catch{}
       }
       setBusy(true,opts.searchMode==='quick'?'light':'heavy');
 /* KAI 51 UNIFIED LOCAL ROUTER: one natural-language command can invoke any HAxBRO workspace before chat. */
