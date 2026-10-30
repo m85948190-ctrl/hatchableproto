@@ -156,14 +156,14 @@ async function wikipediaEvidence(query){
       if(r.ok){
         const item=await r.json();
         if(item?.extract&&item.type!=="disambiguation"){
-          const summary={title:item.title||title,url:item.content_urls?.desktop?.page||("https://en.wikipedia.org/wiki/"+encodeURIComponent(String(item.title||title).replace(/ /g,"_"))),text:clean(item.extract,1800),engine:"Wikipedia"};
+          const summary={title:item.title||title,url:item.content_urls?.desktop?.page||("https://en.wikipedia.org/wiki/"+encodeURIComponent(String(item.title||title).replace(/ /g,"_"))),text:clean(item.extract,1800),engine:"Wikipedia",readStatus:"wikipedia-summary"};
           // A short REST summary is useful, but the answer model needs article context.
           // Read the rendered article when available and keep the summary if blocked.
           try{
             const html=await Promise.race([browser.html(summary.url),new Promise(resolve=>setTimeout(()=>resolve(""),3500))]);
             const full=pageText(html);
             const blocked=/captcha|access denied|security verification|checking your browser|enable javascript/i.test(full);
-            if(!blocked&&full.length>summary.text.length+250)return {...summary,text:full.slice(0,9000)};
+            if(!blocked&&full.length>summary.text.length+250)return {...summary,text:full.slice(0,9000),readStatus:"wikipedia-article"};
           }catch{}
           return summary;
         }
@@ -233,7 +233,7 @@ export default async function(req,res){
         return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
       }catch{return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
     }));
-    const combined=[...pages,...wiki.map(x=>({...x,readStatus:"wikipedia-article"}))].filter(x=>x.text||x.title);
+    const combined=[...pages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>x.text||x.title);
     const seen=new Set();
     const sources=combined.filter(x=>{const key=x.url||x.title;if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,take+2);
     return res.json({ok:true,engine:[searched.engine,wiki.length?"Wikipedia":""].filter(Boolean).join(" + "),engines:searched.engines||{},mode,query,searchQueries:queryVariants(query),sources});
