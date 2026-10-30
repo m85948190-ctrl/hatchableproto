@@ -6,7 +6,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
   const MODEL=PROFILE==='local'?'onnx-community/SmolLM2-135M-Instruct-ONNX-MHA':'onnx-community/SmolLM2-360M-Instruct-ONNX';
   const MODEL_RELEASE=PROFILE==='local'?'local-fast-135m':'kai51-model-latest';
   const TRAINING_SYNC='/api/kai-training-sync';
-  const VERSION=PROFILE==='local'?'kai51-local-135m-q4-v15-creative-fallback':'kai51-github-360m-q4-v35-creative-fallback';
+  const VERSION=PROFILE==='local'?'kai51-local-135m-q4-v15-creative-fallback':'kai51-github-360m-q4-v36-primary-neural-synthesis';
   const MODEL_ASSETS=new Set([
     'config.json',
     'generation_config.json',
@@ -255,6 +255,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
       .slice(-8);
     const messages=[
       {role:'system',content:'You are KAI 51, the conversational intelligence of HAxBRO AI. Talk naturally like a thoughtful, attentive conversation partner while remaining honest that you are an AI. Treat the latest user message as part of the ongoing conversation, not an isolated phrase. Use the recent dialogue to understand references, emotional tone, jokes, corrections, forgiveness, and follow-up questions. Answer what the user actually means; do not change the subject, invent context, repeat canned apologies, or fall back to generic offers to help. For casual chat, respond casually and warmly; for feelings, acknowledge them without being clinical; for factual or technical questions, answer accurately and explain uncertainty. If the message is unclear, ask one brief, natural clarification. Never claim human feelings or experiences. Follow explicit output formats and length constraints.'},
+      ...(hasResearchEvidence?[{role:'system',content:'RESEARCH TASK: You are the final answering model, not a search-results display. Read the supplied evidence carefully, select facts that directly answer the question, compare relevant sources, explain why the key findings matter, and answer in your own words. Cite supported claims as [1], [2], etc., matching the numbered [SOURCE 1], [SOURCE 2] entries. Do not invent facts or claim a page was read when its label says it was only a search snippet. If evidence is weak or conflicting, say exactly what remains uncertain.'}]:[]),
       ...(conditioning?[{role:'system',content:conditioning}]:[]),
       ...normalizedHistory,
       {role:'user',content:modelUserContent}

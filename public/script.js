@@ -284,6 +284,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             mark('router',selectedLabel,'Try the selected model first; if it fails or returns no usable answer, automatically try the backup chain.','running');
             result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
               searchMode:opts.searchMode||'normal',
+              preferred:'kai-github',
               signal:activeChatController?.signal,
               onStage:(stage,detail)=>{
                 const labels={searching:'Searching Google, Bing, DuckDuckGo and Wikipedia',analyzing:'Reading and comparing source pages',composing:'KAI is reasoning over the gathered evidence','local-neural':'Running KAI 51 LOCAL neural model','local-neural-progress':'Loading KAI 51 LOCAL weights',github:'Using KAI 51 GitHub neural backup','router-fallback':'Switching to the next genuine neural model'};
@@ -298,6 +299,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             kaiActivitySet('thinking','running','Reading your request and identifying the next step.');
             result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
               searchMode:opts.searchMode||'normal',
+              preferred:'kai-local',
               signal:activeChatController?.signal,
               onStage:(stage,detail)=>{
                 const labels={
@@ -361,20 +363,17 @@ if(input)input.value='';resize();try{if(!overdrive){
             if(result&&researchTurn?.sources?.length)result={...result,sources:researchTurn.sources,searchEngines:researchTurn.searchEngines||[]};
           }else{
             kaiActivitySet('thinking','done');
-            mark('github','Routing to GitHub model','Running the selected GitHub neural model','running');
-            const researchLayer=window.HAxBROKaiLocalIntelligence;
-            if(!researchLayer?.run)throw new Error('KAI web research layer is not ready');
-            const researchTurn=await researchLayer.run(value,history,{
-              signal:activeChatController?.signal,
+            mark('github','KAI 51 360M primary','Run the selected 360M model first, then the 135M neural backup if needed.','running');
+            result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
               searchMode:opts.searchMode||'normal',
+              preferred:'kai-github',
+              signal:activeChatController?.signal,
               onStage:(stage,detail)=>{
-                if(stage==='searching')mark('searching','Searching the web',detail||'Finding relevant sources','running');
-                if(stage==='analyzing')mark('analyzing','Reading source pages',detail||'Extracting relevant page content','running');
+                const labels={searching:'Searching the web',analyzing:'Reading source pages',composing:'KAI is interpreting the gathered evidence',router:'Running KAI 51 360M primary', 'router-fallback':'Switching to the 135M backup'};
+                const key=stage==='router'?'github':stage==='router-fallback'?'router-fallback':stage;
+                mark(key,labels[stage]||'KAI 51 · '+String(stage||'working'),detail||'Processing this stage','running');
               }
             });
-            const neuralPrompt=researchTurn?.research&&researchTurn?.evidencePrompt?researchTurn.evidencePrompt:value;
-            result=await window.HAxBROKai51Bootstrap?.generate?.(neuralPrompt,history,{signal:activeChatController?.signal},'github');
-            if(result&&researchTurn?.sources?.length)result={...result,sources:researchTurn.sources,searchEngines:researchTurn.searchEngines||[]};
           }
           if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
           if(result?.response){

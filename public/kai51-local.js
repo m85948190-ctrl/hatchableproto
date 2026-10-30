@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = 'kai51-unified-controller-v24-local-evidence-neural-synthesis';
+  const VERSION = 'kai51-unified-controller-v25-360m-primary-evidence-neural-synthesis';
   const explicitWebRequest=message=>/\b(?:search (?:the )?(?:web|internet|online)|look up|latest|recent|today|news|price|cost|weather|current version|official source|verify online|check online|find sources|research current)\b/i.test(String(message||''));
   const userScope=()=>{const n=(localStorage.getItem('haxbro_username')||'anonymous-device').trim().toLowerCase().replace(/[^a-z0-9._-]/g,'_').slice(0,64)||'anonymous-device';return n;};
   const KEY = ()=>'haxbro:kai51:'+userScope()+':installation:v15-github-q4';
@@ -40,7 +40,7 @@
     return next;
   };
 
-  const ENGINE_VERSION='kai51-github-360m-q4-v35-creative-fallback';
+  const ENGINE_VERSION='kai51-github-360m-q4-v36-primary-neural-synthesis';
   const LOCAL_ENGINE_VERSION='kai51-local-135m-q4-v15-creative-fallback';
   if(window.HAxBROKai51Engine && window.HAxBROKai51Engine.version!==ENGINE_VERSION){
     window.HAxBROKai51Engine=null;
@@ -85,7 +85,7 @@
       :'KAI 51 GITHUB precision model starting'});
 
     const job=(async()=>{
-      const mod=await import('/kai51-local-engine.js?v=75');
+      const mod=await import('/kai51-local-engine.js?v=76');
       const engine=await mod.createKai51Engine({
         profile:isLocal?'local':'github',
         onProgress:p=>emit({profile:'heavy',...p}),
@@ -203,21 +203,21 @@
     const ensureActive=()=>{if(signal?.aborted)throw new DOMException('Response stopped by user','AbortError')};
     const preferred=String(hooks?.preferred||'kai-router');
     const names=hooks?.skipLocal
-      ? (preferred==='kai-largest'?['largest','github','local']:['github','largest'])
+      ? (preferred==='kai-largest'?['largest','github','local']:['github','local'])
       : preferred==='kai-largest'?['largest','github','local']
-      :preferred==='kai-github'?['github','local','largest']
-      :preferred==='kai-local'?['local','github','largest']
-      :['local','github','largest'];
+      :preferred==='kai-github'?['github','local']
+      :preferred==='kai-local'?['local','github']
+      :['github','local'];
     const labels={largest:'Google Gemma 3 270M',github:'KAI 51 GitHub 360M',local:'KAI 51 LOCAL'};
     const errors=[];
     /* Only genuine neural models belong in the answer chain. Retrieval-only KAI Lite
        must never be presented as a conversational model or a final answer. */
-    const timeouts={largest:600000,github:240000,local:60000};
+    const timeouts={largest:600000,github:240000,local:120000};
     const bounded=(promise,ms,label,abortSignal)=>new Promise((resolve,reject)=>{let timer;const cleanup=()=>{clearTimeout(timer);abortSignal?.removeEventListener('abort',onAbort)};const onAbort=()=>{cleanup();reject(new DOMException('Response stopped by user','AbortError'))};timer=setTimeout(()=>{cleanup();reject(new Error(label+' timed out after '+Math.round(ms/1000)+' seconds'))},ms);if(abortSignal){if(abortSignal.aborted)return onAbort();abortSignal.addEventListener('abort',onAbort,{once:true})}Promise.resolve(promise).then(value=>{cleanup();resolve(value)},error=>{cleanup();reject(error)})});
     for(const name of names){
       ensureActive();
       const label=labels[name];
-      hooks.onStage?.('router',`Trying ${label} (${name===preferred.replace('kai-','')?'selected model':'backup'})`);
+      hooks.onStage?.('router',`Trying ${label} (${(preferred==='kai-router'?name==='github':name===preferred.replace('kai-',''))?'selected model':'backup'})`);
       try{
         let result;
         const run=async()=>{
@@ -237,7 +237,7 @@
           hooks.onStage?.('router-fallback',failed+' failed; '+label+' answered successfully');
           return {...result,response:notice+response,lane:name,router:preferred==='kai-router',fallback:true,fallbackFrom:previousFailures,routerReason:'failure-based backup'};
         }
-        return {...result,lane:name,router:preferred==='kai-router',fallback:false,routerReason:name===preferred.replace('kai-','')?'selected model answered':'first working model'};
+        return {...result,lane:name,router:preferred==='kai-router',fallback:false,routerReason:(preferred==='kai-router'?name==='github':name===preferred.replace('kai-',''))?'selected model answered':'first working model'};
       }catch(error){
         if(signal?.aborted)throw error;
         const reason=safe(error?.message||error,220);
@@ -263,56 +263,37 @@
 
   async function unifiedGenerate(message,history=[],hooks={}){
     const ensureActive=()=>{if(hooks?.signal?.aborted)throw new DOMException('Response stopped by user','AbortError')};ensureActive();
-    try{ await installLocalFirst();ensureActive(); }catch(e){if(hooks?.signal?.aborted)throw e;hooks.onStage?.('local-error','KAI 51 LOCAL initialization failed; continuing with the browser-local neural lane'); }
+    try{await installLocalFirst();ensureActive();}catch(e){if(hooks?.signal?.aborted)throw e;hooks.onStage?.('local-error','KAI research setup was unavailable; continuing with the selected neural model');}
     const local=window.HAxBROKaiLocalIntelligence;
     let turn=null;
+    let neuralPrompt=message;
     if(local?.run){
       try{
         turn=await local.run(message,history,hooks);ensureActive();
+        /* Memory actions and exact arithmetic are deterministic local tools, not model answers. */
         if(turn?.response&&!turn.handoff){
-          /* A retrieval result is never the final answer. Attach it only when there
-             are real sources; ordinary conversation goes to the neural model directly. */
-          if((Array.isArray(turn.sources)&&turn.sources.length)||(Array.isArray(turn.searchEngines)&&turn.searchEngines.length)){
-            turn={...turn,evidencePrompt:'USER REQUEST:\n'+message+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+turn.response};
-            hooks.onStage?.('local-neural','KAI 51 LOCAL · synthesizing retrieved evidence with the real neural model');
-          }
+          return {...turn,lane:'local',combined:true,toolResult:true};
         }
-        if(turn?.handoff&&turn?.research&&explicitWebRequest(message)){
-          hooks.onStage?.('searching','KAI 51 LOCAL · evidence gathered; continuing to local neural synthesis');
+        /* Only actual research turns receive retrieved evidence. Ordinary conversation
+           remains an ordinary prompt so the model can use its learned knowledge. */
+        if(turn?.research&&turn?.evidencePrompt){
+          neuralPrompt=turn.evidencePrompt;
+          hooks.onStage?.('analyzing','Retrieved pages are ready; KAI 51 360M will interpret and synthesize them');
         }
-        if(turn?.handoff) hooks.onStage?.('local-neural','KAI 51 LOCAL · synthesizing retrieved evidence');
       }catch(e){
         if(hooks?.signal?.aborted)throw e;
-        hooks.onStage?.('local-error','KAI 51 LOCAL retrieval failed; continuing with local neural synthesis');
+        hooks.onStage?.('local-error','Web retrieval could not complete; asking the primary neural model without unverified sources');
       }
     }
-    /* Greetings and other non-retrieval turns go to the smaller, dedicated browser-local model.
-       This is genuine neural inference, not a phrase table or remote-provider handoff. */
-    let localFailure=null;
-    try{
-      hooks.onStage?.('local-neural','KAI 51 LOCAL · browser-local neural synthesis');
-      const neuralPrompt=turn?.evidencePrompt||message;
-      const neural=await withTimeout(()=>generate(neuralPrompt,history,{signal:hooks?.signal,onProgress:p=>hooks.onStage?.('local-neural-progress',p?.status||('KAI 51 LOCAL '+Math.round(Number(p?.progress)||0)+'%'))},'local'),118000,'KAI 51 LOCAL neural synthesis');ensureActive();
-      if(neural?.response) return {...neural,lane:'local',combined:true,sources:turn?.sources||[],searchEngines:turn?.searchEngines||[]};
-      localFailure=new Error('KAI 51 LOCAL returned no usable response');
-    }catch(e){
-      if(hooks?.signal?.aborted)throw e;
-      localFailure=e;
-      hooks.onStage?.('local-error','KAI 51 LOCAL neural inference failed; trying the GitHub neural backup');
-    }
-    /* If LOCAL cannot answer, try the real GitHub neural model next, then Google Gemma 3 270M,
-       and only then KAI Lite retrieval. The chosen backup is named in the response. */
-    try{
-      const backupPrompt=turn?.evidencePrompt||message;
-      const backup=await routerGenerate(backupPrompt,history,{signal:hooks?.signal,preferred:'kai-github',skipLocal:true,onStage:hooks?.onStage,onProgress:hooks?.onProgress});ensureActive();
-      const backupResponse=String(backup?.response||'').trim();
-      if(backupResponse){
-        const lane=backup.lane||'github';
-        const label=lane==='largest'?'Google Gemma 3 270M':lane==='lite'?'KAI Lite':'KAI 51 GitHub 360M';
-        return {...backup,response:'⚠️ **KAI backup notice:** KAI 51 LOCAL did not produce a usable answer, so KAI switched to '+label+' for this response.\n\n'+backupResponse,lane,combined:true,fallback:true,fallbackFrom:['KAI 51 LOCAL'],sources:turn?.sources||backup.sources||[],searchEngines:turn?.searchEngines||backup.searchEngines||[]};
-      }
-    }catch(e){if(hooks?.signal?.aborted)throw e;hooks.onStage?.('router-fallback','GitHub 360M and recovery lanes could not complete this turn');}
-    throw new Error('KAI 51 LOCAL and its GitHub/Largest/KAI Lite backup lanes could not complete this turn. '+String(localFailure?.message||'No usable response was returned.'));
+    const preferred=hooks?.preferred==='kai-local'?'kai-local':'kai-router';
+    hooks.onStage?.('router',preferred==='kai-local'?'Starting the selected 135M local model':'Starting KAI 51 360M primary model');
+    const result=await routerGenerate(neuralPrompt,history,{
+      ...hooks,
+      preferred,
+      skipLocal:false
+    });
+    ensureActive();
+    return {...result,combined:true,sources:turn?.sources||result?.sources||[],searchEngines:turn?.searchEngines||result?.searchEngines||[]};
   }
 
   window.HAxBROKai51Bootstrap = {
@@ -332,26 +313,22 @@
   };
 
   try { navigator.storage?.persist?.().catch(()=>{}); } catch {}
-  /* Start only the small LOCAL neural model at boot. GitHub 360M and Google Gemma 3 270M
-     remain on-demand, so three large model initializations cannot compete for RAM,
-     network bandwidth, or WebGPU while a chat response is waiting. */
+  /* Retrieval initializes lightly at boot. Neural weights remain on demand: 360M
+     is the default primary, and 135M loads only if the primary model fails. */
   setTimeout(()=>maybeInstall().catch(()=>{}),250);
   let pipelinePromise=null;
-  const warmSelectedLocal=()=>{
+  const warmPrimaryGithub=()=>{
     if(pipelinePromise)return pipelinePromise;
     pipelinePromise=(async()=>{
-      try{await loadEngine('local');}
-      catch(e){console.warn('KAI Router: LOCAL model initialization failed; it can retry on the next request',e);}
+      try{await loadEngine('github');}
+      catch(e){console.warn('KAI Router: primary 360M warm-up failed; it can retry on the next request',e);}
       return {local:!!window.HAxBROKai51LocalFastEngine?.isReady?.(),github:!!window.HAxBROKai51Engine?.isReady?.(),largest:!!window.HAxBROKai51LargestEngine?.isReady?.()};
     })().finally(()=>{pipelinePromise=null;});
     return pipelinePromise;
   };
-  window.HAxBROKai51BootstrapPipeline={start:warmSelectedLocal,status:()=>({local:!!window.HAxBROKai51LocalFastEngine?.isReady?.(),github:!!window.HAxBROKai51Engine?.isReady?.(),largest:!!window.HAxBROKai51LargestEngine?.isReady?.(),running:!!pipelinePromise})};
-  if(!window.HAxBRODisableKAI51Warmup){
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',warmSelectedLocal,{once:true});
-    else warmSelectedLocal();
-    // Selecting a model is lightweight; its own neural weights load when the user sends a request to that lane.
-  }
+  window.HAxBROKai51BootstrapPipeline={start:warmPrimaryGithub,status:()=>({local:!!window.HAxBROKai51LocalFastEngine?.isReady?.(),github:!!window.HAxBROKai51Engine?.isReady?.(),largest:!!window.HAxBROKai51LargestEngine?.isReady?.(),running:!!pipelinePromise})};
+  /* Do not pre-download either model at startup. The 360M primary loads on the
+     first chat request; the 135M model is loaded only if that primary attempt fails. */
   setInterval(()=>{
     try{
       const s=read();
