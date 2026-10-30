@@ -89,10 +89,14 @@
     }finally{clearTimeout(timer)}
   }
 
-  async function searchFast(query,signal){
-    const deadline=new Promise(resolve=>setTimeout(()=>resolve({web:null,wiki:[]}),12000));
+  async function searchFast(query,signal,searchMode='normal'){
+    const mode=searchMode==='deep'?'deep':'fast';
+    // Web search opens and reads result pages. Give that work enough time to finish
+    // before the neural model starts; the chat watchdog remains the outer limit.
+    const deadlineMs=mode==='deep'?45000:25000;
+    const deadline=new Promise(resolve=>setTimeout(()=>resolve({web:null,wiki:[]}),deadlineMs));
     const retrieval=Promise.all([
-      searchWeb(query,'fast',signal).catch(()=>null),
+      searchWeb(query,mode,signal).catch(()=>null),
       searchWikipedia(query).catch(()=>[])
     ]).then(([web,wiki])=>({web,wiki}));
     return Promise.race([retrieval,deadline]);
@@ -177,7 +181,7 @@
     if(wantsSearch){
       hooks.onStage?.('searching','KAI 51 · LOCAL is searching Google, Bing, DuckDuckGo and Wikipedia');
       const [retrieved,knowledge]=await Promise.all([
-        searchFast(query,hooks?.signal),
+        searchFast(query,hooks?.signal,hooks?.searchMode||'normal'),
         searchKnowledge(query,hooks?.signal)
       ]);ensureActive();
       web=retrieved.web;wiki=retrieved.wiki;files=knowledge;
@@ -192,9 +196,10 @@
     for(const s of sources){const key=s.url||s.title;if(!key||seen.has(key))continue;seen.add(key);unique.push(s);}
     ensureActive();hooks.onStage?.('analyzing','KAI 51 · reading and comparing retrieved page evidence');
     const evidence=unique.slice(0,6).map((s,i)=>'[SOURCE '+(i+1)+'] '+s.source+' — '+s.title+' ['+(s.readStatus||'retrieved')+']'+(s.url?' — '+s.url:'')+'\n'+s.text).join('\n\n');
+    const readableSources=unique.filter(s=>s.readStatus==='page-read'||s.readStatus==='wikipedia-article'||s.source==='HAxBRO Knowledge');
     hooks.onStage?.('composing','KAI 51 · neural model is interpreting the source material');
-    const reason=unique.length?'Read source material is ready for neural interpretation':'No usable web evidence was retrieved; disclose the limitation if answering from model knowledge';
-    const evidencePrompt=memoryContext+'You are KAI 51. Respond naturally to the user actual intent. Do not copy source paragraphs or dump links. Read the evidence, identify the main findings, connect related facts, distinguish reported facts from inference, compare disagreements, and explain what the findings mean in your own words. Cite sources inline using [1], [2], etc. only for claims those sources support. If evidence is incomplete or conflicting, say so and do not invent missing facts.\n\nUSER REQUEST:\n'+prompt+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+(evidence||'No reliable retrieved web or knowledge evidence was available.');
+    const reason=readableSources.length?'Read source material is ready for neural interpretation':'No complete readable source was retrieved; KAI must disclose that research could not verify the answer';
+    const evidencePrompt=memoryContext+'You are KAI 51. Respond naturally to the user actual intent. Do not copy source paragraphs or dump links. Read and synthesize the retrieved material, identify the main findings, connect related facts, distinguish reported facts from inference, compare disagreements, and explain what the findings mean in your own words. Cite sources inline using [1], [2], etc. only for claims those sources support. IMPORTANT EVIDENCE RULE: page-read, wikipedia-article, and HAxBRO Knowledge entries contain readable source material. search-snippet-fallback entries are search leads only, not verified page content. If no readable source is present, explicitly say that this research pass could not read enough reliable material to verify the answer; do not fill the gap from pretrained memory or guess. If evidence is incomplete or conflicting, say so and do not invent missing facts.\n\nUSER REQUEST:\n'+prompt+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+(evidence||'No reliable retrieved web or knowledge evidence was available.');
     return {lane:'local',handoff:true,research:wantsSearch,reason,evidencePrompt,response:null,provider:'KAI 51 LOCAL · research + neural reasoning',model:'SmolLM2 local neural synthesis',local:true,localModel:true,sources:unique.slice(0,6).map(({title,url,source,readStatus})=>({title,url,source,readStatus:readStatus||'retrieved'})),searchEngines:[...(web?.engine?[web.engine]:[]),...(wiki.length?['Wikipedia']:[])],retrievalMs:0};
   }
 

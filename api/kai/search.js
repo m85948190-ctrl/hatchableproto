@@ -172,7 +172,7 @@ async function wikipediaEvidence(query){
     return null;
   };
   /* Try the exact article first; this is faster and more accurate for clean topics. */
-  if(normalized&&normalized.split(/\s+/).length<=4){
+  if(normalized&&normalized.split(/\s+/).length===1){
     const direct=await fetchSummary(normalized,1000);
     if(direct)return [direct];
   }

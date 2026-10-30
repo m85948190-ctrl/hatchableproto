@@ -211,6 +211,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     const userRequest=String(requestMatch?.[1]||prompt).trim();
     // Keep the evidence wrapper in the actual model input. The prior code extracted USER REQUEST for classification, then accidentally sent only that question to the neural model and discarded all retrieved sources.
     const modelUserContent=requestMatch?prompt:userRequest;
+    const hasResearchEvidence=/RETRIEVED WEB \/ WIKIPEDIA \/ HAxBRO KNOWLEDGE EVIDENCE:/i.test(modelUserContent);
     const isGreeting=/^(?:hi|hello|hey|yo|howdy|good morning|good afternoon|good evening|what'?s up|sup)(?:\s+bro)?[!,.?\s]*$/i.test(userRequest);
     const isCasualReaction=/^(?:o+|h+m+|h+e+h+|l+o+l+|haha+|wow+|whoa+|huh+|hmm+|uh+|um+|nice|cool|yay+|bruh|bro+|okay+|ok+|👍|😂|❤️|😅|🤔)[!?. ,\s]*$/i.test(userRequest);
     const isCombinedCasual=/^(?:(?:haha+|lol+|hehe+|wow+)[,\s]+)?(?:hi|hello|hey|yo|sup)(?:[,\s]+(?:haha+|lol+|hehe+))?[!?. ,\s]*$/i.test(userRequest);
@@ -226,6 +227,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     const capability=!appAnalysis&&/\b(?:app|application|calculator|chatbot|dashboard|website|web\s*app|build|publish|export)\b/i.test(userRequest)?'app-maker':'general';
     if(appAnalysis) generationOptions.max_new_tokens=96;
     else if(capability==='app-maker') generationOptions.max_new_tokens=PROFILE==='local'?768:1536;
+    else if(hasResearchEvidence) generationOptions.max_new_tokens=PROFILE==='local'?220:320;
     const rules=(trainingPack?.rules||[])
       .filter(x=>x&&x.rule)
       .filter(x=>x.capability==='general' || x.capability===capability)

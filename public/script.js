@@ -264,7 +264,7 @@ if(input)input.value='';resize();try{if(!overdrive){
          LITE is independent and remains the final web-only recovery lane.
          The UI receives one ordered activity stream so stages cannot overwrite/jumble each other. */
       const selectedModel=window.HAxBROSelectedModel||localStorage.getItem(haxbroUserKey('model_choice'))||'kai-router';
-      if(!opts.fromChoice && (selectedModel==='kai-router'||selectedModel==='kai-local'||selectedModel==='kai-github'||selectedModel==='kai-largest')){
+      if(selectedModel==='kai-router'||selectedModel==='kai-local'||selectedModel==='kai-github'||selectedModel==='kai-largest'){
         setBusy(true,selectedModel==='kai-local'?'light':'heavy');
         kaiActivityStart(selectedModel==='kai-local'?'light':'heavy');
         const history=active()?.items?.slice(-12)||[];
@@ -283,6 +283,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             const selectedLabel=selectedModel==='kai-largest'?'KAI 51 · Google Gemma 3 270M':selectedModel==='kai-github'?'KAI 51 GitHub 360M':selectedModel==='kai-local'?'KAI 51 LOCAL':'KAI Router · automatic selection';
             mark('router',selectedLabel,'Try the selected model first; if it fails or returns no usable answer, automatically try the backup chain.','running');
             result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
+              searchMode:opts.searchMode||'normal',
               signal:activeChatController?.signal,
               onStage:(stage,detail)=>{
                 const labels={searching:'Searching Google, Bing, DuckDuckGo and Wikipedia',analyzing:'Reading and comparing source pages',composing:'KAI is reasoning over the gathered evidence','local-neural':'Running KAI 51 LOCAL neural model','local-neural-progress':'Loading KAI 51 LOCAL weights',github:'Using KAI 51 GitHub neural backup','router-fallback':'Switching to the next genuine neural model'};
@@ -296,6 +297,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             kaiActivitySet('thinking','done');
             kaiActivitySet('thinking','running','Reading your request and identifying the next step.');
             result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
+              searchMode:opts.searchMode||'normal',
               signal:activeChatController?.signal,
               onStage:(stage,detail)=>{
                 const labels={
