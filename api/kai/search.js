@@ -21,7 +21,7 @@ function extractLinks(html){
   return out;
 }
 
-const pageText=html=>clean(String(html||"").replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," "),6000);
+const pageText=html=>clean(String(html||"").replace(/<(script|style|noscript|svg|nav|header|footer|aside)\b[\s\S]*?<\/\1>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,"<").replace(/&gt;/gi,">"),9000);
 
 async function googleSearch(query){
   const url="https://www.google.com/search?gbv=1&hl=en&q="+encodeURIComponent(query);
@@ -193,13 +193,13 @@ export default async function(req,res){
       wikipediaEvidence(query)
     ]);
     const links=searched.links||[];
-    const take=mode==="deep"?8:5;
+    const take=mode==="deep"?6:3;
     // Open actual result pages, not just search snippets. Keep the snippet only
     // as a clearly marked fallback when a publisher page is unavailable.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
       const snippet=clean(x.text||"",1400);
       try{
-        const timeout=mode==="deep"?6500:4200;
+        const timeout=mode==="deep"?10000:8500;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
         const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue/i.test(text);
