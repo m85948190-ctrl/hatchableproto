@@ -6,7 +6,8 @@
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
   function queryFor(message){
-    return clean(message)
+    const original=clean(message);
+    let q=original
       .replace(/^\s*(?:please\s+)?(?:can you|could you|would you|tell me|explain|help me)\s+/i,'')
       .replace(/^\s*(?:what causes|what caused|what makes|what made|what is|what are|who is|who are|where is|where are|when did|when was|why does|why do|why is|why are|how does|how do|how is|how are)\s+/i,'')
       .replace(/\s+(?:and\s+)?(?:why|how)\s+(?:do|does|did|is|are|can|could|would|will)\s+(?:he|she|it|they|we|you|plants|batteries|the|this|that)\b[\s\S]*$/i,' ')
@@ -14,7 +15,12 @@
       .replace(/^\s*(?:the\s+)?(?:current|latest|recent)\s+/i,'')
       .replace(/^\s*(?:the|a|an)\s+/i,'')
       .replace(/\b(?:give|provide|include|cite|list|show)\s+(?:me\s+)?(?:a\s+)?(?:(?:short|brief|accurate|concise|detailed|simple)\s+){0,3}(?:answer|summary|response|sources?|citations?|references?)\b.*$/i,' ')
-      .replace(/[?!.]+$/,'').replace(/\s+/g,' ').trim().slice(0,700);
+      .replace(/[?!.]+$/,'').replace(/\s+/g,' ').trim();
+    if(/\bnorthern lights\b/i.test(original)&&/\b(cause|causes|why|colour|colours|color|colors|solar|atmosphere)\b/i.test(original)) q=q.replace(/\bnorthern lights\b/ig,'aurora borealis natural light phenomenon');
+    if(/\blithium[- ]ion batteries?\b/i.test(original)&&/\b(degrade|degrades|degrading|degradation|aging|ageing|capacity fade)\b/i.test(original)){
+      q=q.replace(/\blithium[- ]ion batteries?\b/ig,'lithium-ion battery').replace(/\b(?:degrade|degrades|degrading|degradation|capacity fade)\b/ig,'aging').replace(/\bover time\b/ig,'');
+    }
+    return q.replace(/\s+/g,' ').trim().slice(0,700);
   }
 
   const STOP_WORDS=new Set('a an the is are was were be been being do does did how what who where when why which can could would should please tell explain simply simple terms words about for from into with that this these those it its of on in to by and or current latest today now me my you your we they them their as according'.split(' '));

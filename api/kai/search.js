@@ -117,7 +117,8 @@ async function multiSearch(query,mode="fast"){
     const matches=keyTerms.filter(term=>text.includes(term)).length;
     // One generic word (e.g. "causes" or "lithium") must not make an unrelated
     // result look relevant. Require two topic terms whenever the query has two+.
-    return matches>=(keyTerms.length>=2?2:1);
+    const required=keyTerms.length>=4?3:keyTerms.length>=2?2:1;
+    return matches>=required;
   });
   const google=filterRelevant(collect(googleResults,"Google Web",6));
   const bing=filterRelevant(collect(bingResults,"Bing Web",6));
@@ -154,7 +155,18 @@ async function wikipediaEvidence(query){
       const r=await fetch(endpoint,{signal:controller.signal,headers:{accept:"application/json"}});
       if(r.ok){
         const item=await r.json();
-        if(item?.extract&&item.type!=="disambiguation")return {title:item.title||title,url:item.content_urls?.desktop?.page||("https://en.wikipedia.org/wiki/"+encodeURIComponent(String(item.title||title).replace(/ /g,"_"))),text:clean(item.extract,1800),engine:"Wikipedia"};
+        if(item?.extract&&item.type!=="disambiguation"){
+          const summary={title:item.title||title,url:item.content_urls?.desktop?.page||("https://en.wikipedia.org/wiki/"+encodeURIComponent(String(item.title||title).replace(/ /g,"_"))),text:clean(item.extract,1800),engine:"Wikipedia"};
+          // A short REST summary is useful, but the answer model needs article context.
+          // Read the rendered article when available and keep the summary if blocked.
+          try{
+            const html=await Promise.race([browser.html(summary.url),new Promise(resolve=>setTimeout(()=>resolve(""),3500))]);
+            const full=pageText(html);
+            const blocked=/captcha|access denied|security verification|checking your browser|enable javascript/i.test(full);
+            if(!blocked&&full.length>summary.text.length+250)return {...summary,text:full.slice(0,9000)};
+          }catch{}
+          return summary;
+        }
       }
     }catch{}finally{clearTimeout(timer)}
     /* Some server runtimes block direct Wikipedia API fetches. Use the managed
