@@ -16,7 +16,7 @@
       .replace(/^\s*(?:the|a|an)\s+/i,'')
       .replace(/\b(?:give|provide|include|cite|list|show)\s+(?:me\s+)?(?:a\s+)?(?:(?:short|brief|accurate|concise|detailed|simple)\s+){0,3}(?:answer|summary|response|sources?|citations?|references?)\b.*$/i,' ')
       .replace(/[?!.]+$/,'').replace(/\s+/g,' ').trim();
-    if(/\bnorthern lights\b/i.test(original)&&/\b(cause|causes|why|colour|colours|color|colors|solar|atmosphere)\b/i.test(original)) q=q.replace(/\bnorthern lights\b/ig,'aurora borealis natural light phenomenon');
+    if(/\bnorthern lights\b/i.test(original)&&/\b(cause|causes|why|colour|colours|color|colors|solar|atmosphere)\b/i.test(original)) q=q.replace(/\bnorthern lights\b/ig,'aurora borealis');
     if(/\blithium[- ]ion batteries?\b/i.test(original)&&/\b(degrade|degrades|degrading|degradation|aging|ageing|capacity fade)\b/i.test(original)){
       q=q.replace(/\blithium[- ]ion batteries?\b/ig,'lithium-ion battery').replace(/\b(?:degrade|degrades|degrading|degradation|capacity fade)\b/ig,'aging').replace(/\bover time\b/ig,'');
     }

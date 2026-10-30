@@ -338,8 +338,19 @@ if(input)input.value='';resize();try{if(!overdrive){
             });
           }else if(selectedModel==='kai-largest'){
             kaiActivitySet('thinking','done');
+            const researchLayer=window.HAxBROKaiLocalIntelligence;
+            if(!researchLayer?.run)throw new Error('KAI web research layer is not ready');
+            const researchTurn=await researchLayer.run(value,history,{
+              signal:activeChatController?.signal,
+              searchMode:opts.searchMode||'normal',
+              onStage:(stage,detail)=>{
+                if(stage==='searching')mark('searching','Searching the web',detail||'Finding relevant sources','running');
+                if(stage==='analyzing')mark('analyzing','Reading source pages',detail||'Extracting relevant page content','running');
+              }
+            });
+            const neuralPrompt=researchTurn?.research&&researchTurn?.evidencePrompt?researchTurn.evidencePrompt:value;
             mark('largest-download','KAI 51 · Google Gemma 3 270M','Google Gemma downloads only after you select it; first use may take time.','running');
-            result=await window.HAxBROKai51Bootstrap?.generate?.(value,history,{
+            result=await window.HAxBROKai51Bootstrap?.generate?.(neuralPrompt,history,{
               signal:activeChatController?.signal,
               onStage:(stage,detail)=>mark('largest-download','KAI 51 · Google Gemma 3 270M',detail||'Loading the selected Google Gemma model','running'),
               onProgress:p=>{
@@ -347,10 +358,23 @@ if(input)input.value='';resize();try{if(!overdrive){
                 mark('largest-download','KAI 51 · Google Gemma 3 270M',String(p?.status||'Downloading Gemma model')+(pct?' · '+pct+'%':''),'running');
               }
             },'largest');
+            if(result&&researchTurn?.sources?.length)result={...result,sources:researchTurn.sources,searchEngines:researchTurn.searchEngines||[]};
           }else{
             kaiActivitySet('thinking','done');
             mark('github','Routing to GitHub model','Running the selected GitHub neural model','running');
-            result=await window.HAxBROKai51Bootstrap?.generate?.(value,history,{signal:activeChatController?.signal},'github');
+            const researchLayer=window.HAxBROKaiLocalIntelligence;
+            if(!researchLayer?.run)throw new Error('KAI web research layer is not ready');
+            const researchTurn=await researchLayer.run(value,history,{
+              signal:activeChatController?.signal,
+              searchMode:opts.searchMode||'normal',
+              onStage:(stage,detail)=>{
+                if(stage==='searching')mark('searching','Searching the web',detail||'Finding relevant sources','running');
+                if(stage==='analyzing')mark('analyzing','Reading source pages',detail||'Extracting relevant page content','running');
+              }
+            });
+            const neuralPrompt=researchTurn?.research&&researchTurn?.evidencePrompt?researchTurn.evidencePrompt:value;
+            result=await window.HAxBROKai51Bootstrap?.generate?.(neuralPrompt,history,{signal:activeChatController?.signal},'github');
+            if(result&&researchTurn?.sources?.length)result={...result,sources:researchTurn.sources,searchEngines:researchTurn.searchEngines||[]};
           }
           if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
           if(result?.response){
