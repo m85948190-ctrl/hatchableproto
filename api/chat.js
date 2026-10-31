@@ -95,7 +95,7 @@ export default async function(req,res){
   /* Browser-neural mode: this API gathers and reads evidence; the on-device 360M/135M model writes the answer. */
   if(body.clientNeuralResearch===true){
     const searchMode=body.searchMode==='deep'?'deep':'fast';
-    const researchPrompt=/\b(?:research|compare|comparison|analy[sz]e|investigate|evidence|sources?|latest|recent|today|news|price|cost|weather|current|official|verify|look up|search|what is|what are|who is|who are|why|how|explain|history|pros and cons|advantages|disadvantages)\b/i.test(prompt);
+    const researchPrompt=/\b(?:research|compare|comparison|analy[sz]e|investigate|evidence|sources?|latest|recent|today|news|price|cost|weather|current|official|verify|look up|search|what is|what are|who is|who are|causes?|why|how|explain|history|pros and cons|advantages|disadvantages)\b/i.test(prompt);
     let sources=[],engine='';
     if(researchPrompt){
       const response=await fetch('https://haxbro.hatchable.site/api/kai/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:prompt,mode:searchMode})});
