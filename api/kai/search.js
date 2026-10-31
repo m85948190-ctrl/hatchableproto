@@ -219,13 +219,13 @@ export default async function(req,res){
       wikipediaEvidence(query)
     ]);
     const links=searched.links||[];
-    const take=mode==="deep"?6:3;
+    const take=mode==="deep"?8:5;
     // Open actual result pages, not just search snippets. Keep the snippet only
     // as a clearly marked fallback when a publisher page is unavailable.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
       const snippet=clean(x.text||"",1400);
       try{
-        const timeout=mode==="deep"?10000:8500;
+        const timeout=mode==="deep"?8500:6500;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
         const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden/i.test(text);
