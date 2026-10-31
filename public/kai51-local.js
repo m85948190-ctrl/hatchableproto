@@ -251,7 +251,22 @@
     const local=window.HAxBROKaiLocalIntelligence;
     let turn=null;
     let neuralPrompt=message;
-    if(local?.run){
+    let serverResearch=null;
+    if(local?.classify?.(message)?.research){
+      try{
+        hooks.onStage?.('searching','HAxBRO Chat API is gathering relevant pages');
+        const apiResponse=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:hooks?.signal,body:JSON.stringify({message,history:JSON.stringify(history||[]).slice(-7000),mode:'normal',searchMode:hooks?.searchMode==='deep'?'deep':'fast',clientNeuralResearch:true})});
+        const apiData=await apiResponse.json().catch(()=>({}));
+        if(!apiResponse.ok||!apiData?.ok||!apiData?.neuralPrompt)throw new Error(apiData?.error||'Chat API research handoff failed');
+        serverResearch=apiData;
+        neuralPrompt=apiData.neuralPrompt;
+        hooks.onSources?.(apiData.sources||[]);
+        hooks.onStage?.('analyzing','Chat API returned '+(apiData.sources?.length||0)+' source records; the neural model will evaluate their contents');
+      }catch(error){if(hooks?.signal?.aborted)throw error;hooks.onStage?.('local-error','Chat API research was unavailable; trying the browser research reader');}
+    }
+    if(serverResearch){
+      turn={research:!!serverResearch.research,sources:serverResearch.sources||[],searchEngines:serverResearch.engine?[serverResearch.engine]:[],evidencePrompt:serverResearch.neuralPrompt,handoff:true};
+    }else if(local?.run){
       try{
         turn=await local.run(message,history,hooks);ensureActive();
         /* Memory actions and exact arithmetic are deterministic local tools, not model answers. */
