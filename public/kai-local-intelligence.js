@@ -1,7 +1,7 @@
 (() => {
   /* KAI 51 LOCAL: fast evidence retrieval + neural conversation.
      This file routes and gathers evidence; it must not fabricate a response from phrase rules. */
-  const VERSION='kai51-local-evidence-synthesis-v15-live-source-results';
+  const VERSION='kai51-local-evidence-synthesis-v16-model-timeout-and-context-fix';
   const clean=(v,n=9000)=>String(v??'').replace(/\u0000/g,'').trim().slice(0,n);
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
@@ -202,7 +202,7 @@
     const unique=[];const seen=new Set();
     for(const s of sources){const key=s.url||s.title;if(!key||seen.has(key))continue;seen.add(key);unique.push(s);}
     ensureActive();hooks.onStage?.('analyzing','KAI 51 · reading and comparing retrieved page evidence');
-    const evidence=unique.slice(0,6).map((s,i)=>'[SOURCE '+(i+1)+'] '+s.source+' — '+s.title+' ['+(s.readStatus||'retrieved')+']'+(s.url?' — '+s.url:'')+'\n'+clean(s.text,2400)).join('\n\n');
+    const evidence=unique.slice(0,4).map((s,i)=>'[SOURCE '+(i+1)+'] '+s.source+' — '+s.title+' ['+(s.readStatus||'retrieved')+']'+(s.url?' — '+s.url:'')+'\n'+clean(s.text,1400)).join('\n\n');
     const visibleSources=unique.slice(0,6).map(({title,url,source,readStatus})=>({title,url,source,readStatus:readStatus||'retrieved'}));
     hooks.onSources?.(visibleSources);
     const readableSources=unique.filter(s=>s.readStatus==='page-read'||s.readStatus==='wikipedia-article'||s.readStatus==='wikipedia-summary'||s.source==='HAxBRO Knowledge');

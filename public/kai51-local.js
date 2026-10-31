@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = 'kai51-unified-controller-v26-360m-primary-live-sources';
+  const VERSION = 'kai51-unified-controller-v27-360m-answer-timeout-fix';
   const explicitWebRequest=message=>/\b(?:search (?:the )?(?:web|internet|online)|look up|latest|recent|today|news|price|cost|weather|current version|official source|verify online|check online|find sources|research current)\b/i.test(String(message||''));
   const userScope=()=>{const n=(localStorage.getItem('haxbro_username')||'anonymous-device').trim().toLowerCase().replace(/[^a-z0-9._-]/g,'_').slice(0,64)||'anonymous-device';return n;};
   const KEY = ()=>'haxbro:kai51:'+userScope()+':installation:v15-github-q4';
@@ -178,7 +178,7 @@
       /* Respect the selected model. Each selected lane must run its own neural weights; never silently substitute another model. */
       const modelLoadTimeout=profile==='github'?240000:90000;
       const engine=await withTimeout(()=>loadEngine(profile),modelLoadTimeout,'KAI 51 '+profile.toUpperCase()+' model initialization');ensureActive();
-      const result=await withTimeout(()=>engine.generate(synthesisMessage,history),profile==='local'?60000:90000,'KAI 51 '+profile.toUpperCase()+' inference');ensureActive();
+      const result=await withTimeout(()=>engine.generate(synthesisMessage,history),profile==='local'?105000:210000,'KAI 51 '+profile.toUpperCase()+' model load + inference');ensureActive();
       return {...result,lane:profile==='github'?'github':'local'};
     }finally{window.removeEventListener('haxbro:kai-local-progress',forward);}
   }
