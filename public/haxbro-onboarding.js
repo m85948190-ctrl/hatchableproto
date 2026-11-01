@@ -113,7 +113,7 @@ function setIntroLabel(){
 if(intro){
  const btn=intro.querySelector('.hci-continue');
  if(btn){
-  let left=2;btn.dataset.remaining='2';setIntroLabel();
+  let left=20;btn.dataset.remaining='20';setIntroLabel();
   const tick=setInterval(()=>{left=Math.max(0,left-1);btn.dataset.remaining=String(left);setIntroLabel();if(left===0)clearInterval(tick)},1000);
   btn.addEventListener('click',()=>{if(btn.disabled)return;beginSequence()});
  }
