@@ -1,4 +1,4 @@
-const VERSION = "kai51-gemma3-1b-webgpu-v2";
+const VERSION = "kai51-gemma3-1b-webgpu-v3";
 const MODEL = "Google Gemma 3 1B Instruct";
 const RUNTIME = "gemma-webgpu@0.1.0";
 const MODEL_BYTES = 1069306400;
@@ -91,7 +91,14 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       const adapter = await withTimeout(navigator.gpu.requestAdapter(),30000,"WebGPU adapter initialization");
       if (!adapter) throw new Error("WebGPU is present, but this device did not provide a compatible GPU adapter.");
       report(5,"Loading Gemma runtime");
-      const mod = await withTimeout(import("https://esm.sh/" + RUNTIME),90000,"Gemma runtime download");
+      let mod;
+      try {
+        report(5,"Connecting to Gemma runtime CDN · primary");
+        mod = await withTimeout(import("https://esm.sh/" + RUNTIME),15000,"Primary Gemma runtime CDN");
+      } catch (primaryError) {
+        report(6,"Primary CDN unavailable · switching Gemma runtime mirror");
+        mod = await withTimeout(import("https://cdn.jsdelivr.net/npm/" + RUNTIME + "/+esm"),60000,"Gemma runtime mirror");
+      }
       const create = mod.createGemmaEngine || mod.default?.createGemmaEngine;
       if (typeof create !== "function") throw new Error("The Gemma WebGPU package did not expose createGemmaEngine.");
       runtime = await withTimeout(createWithTransferProgress(create,{
