@@ -213,7 +213,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     const modelUserContent=requestMatch?prompt:userRequest;
     const hasResearchEvidence=/RETRIEVED WEB \/ WIKIPEDIA \/ HAxBRO KNOWLEDGE EVIDENCE:/i.test(modelUserContent);
     const isGreeting=/^(?:hi|hello|hey|yo|howdy|good morning|good afternoon|good evening|what'?s up|sup)(?:\s+bro)?[!,.?\s]*$/i.test(userRequest);
-    const isCasualReaction=/^(?:o+|h+m+|h+e+h+|l+o+l+|haha+|wow+|whoa+|huh+|hmm+|uh+|um+|nice|cool|yay+|bruh|bro+|okay+|ok+|👍|😂|❤️|😅|🤔)[!?. ,\s]*$/i.test(userRequest);
+    const isCasualReaction=/^(?:o+|h+m+|h+e+h+|l+o+l+|haha+|wow+|whoa+|huh+|hmm+|uh+|um+|nice|cool|yay+|bruh|bro+|okay+|ok+|ok\s+good|okay\s+good|all\s+right|alright|good|great|sounds\s+good|nice\s+one|👍|😂|❤️|😅|🤔)[!?. ,\s]*$/i.test(userRequest);
     const isCombinedCasual=/^(?:(?:haha+|lol+|hehe+|wow+)[,\s]+)?(?:hi|hello|hey|yo|sup)(?:[,\s]+(?:haha+|lol+|hehe+))?[!?. ,\s]*$/i.test(userRequest);
     const isSmallTalk=isGreeting||isCasualReaction||isCombinedCasual;
     // Short clarifications and corrections also go through neural inference with the recent dialogue attached.
@@ -246,7 +246,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     const normalizedHistory=(Array.isArray(history)?history:[])
       .filter(x=>x&&typeof x==='object')
       .map(x=>{
-        const rawRole=String(x.role||x.sender||'user').toLowerCase();
+        const rawRole=String(x.role||x.sender||x.who||'user').toLowerCase();
         const role=rawRole==='bot'||rawRole==='ai'||rawRole==='model'||rawRole==='assistant'?'assistant':'user';
         const content=String(x.content||x.text||x.message||'').trim().slice(0,900);
         return {role,content};
@@ -330,28 +330,16 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     const stillWeather=isGreeting&&/\b(?:weather|forecast|temperature|rain|sunny)\b/i.test(response);
     const stalePoliteReply=isSmallTalk&&/\b(?:glad i could help you today|thanks for asking|since we last spoke|sorry for what i said earlier|is there something specific|status check|system online)\b/i.test(response);
     const unfinishedSmallTalk=isSmallTalk&&response.length>0&&!/[.!?…)"’]$/.test(response);
-    if(isSmallTalk&&(stillRepeating||stillApologizing||stillWeather||stalePoliteReply||unfinishedSmallTalk)){
-      response=isGreeting?"Hey! 😊 What’s up?":/^(?:o+|h+e+h+|l+o+l+|haha+|wow+|whoa+)[!?. ,\s]*$/i.test(userRequest)?"Haha 😄 what’s up?":"I’m listening. What’s on your mind?";
-    } else if(brokenOutput){
-      if(emotionalMessage){
-        response="I’m sorry it’s been a rough one, bro. I’m here to listen—want to tell me what happened?";
-      } else if(creativeRequest&&rainyScene){
-        response="Rain whispered against the windows as streetlights shimmered across the wet pavement. The evening smelled of fresh earth, and the city settled into a quiet, silver glow.";
-      } else if(creativeRequest){
-        response="The room held a quiet glow as the last light faded, and every small sound seemed to belong to a story waiting to unfold. Outside, the world moved on, but here the moment felt suspended—soft, vivid, and full of possibility.";
-      } else if(/\b(?:who are you|what(?:'s| is) your name|are you kai)\b/i.test(userRequest)){
-        response="I’m KAI 51, HAxBRO’s AI assistant. What can I help you with?";
-      } else {
-        response="I couldn’t put together a reliable answer just now, so I won’t guess. Please try that question once more.";
-      }
+    if(isSmallTalk&&(stillRepeating||stillApologizing||stillWeather||stalePoliteReply||unfinishedSmallTalk)||brokenOutput){
+      // Never replace neural output with a fixed greeting, apology, creative sample, or
+      // generic answer. A failed repair is a model failure and must reach the router.
+      throw new Error('Neural model output remained repetitive or incomplete after its repair attempt.');
     }
     // Identity integrity guard: the small base model can hallucinate numbered KAI identities.
     // Never expose a KAI 52/53/etc. sequence or repeated self-identification as a valid answer.
     const identityDrift=/\bKAI\s*(?:5[2-9]|[6-9]\d|\d{3,})\b/i.test(response)||(/\bKAI\s*51\b/i.test(response)&&(/\bKAI\s*5[2-9]\b/i.test(response)||(/\bI(?:'m| am) KAI\s*51\b/ig.test(response)&&((response.match(/\bI(?:'m| am) KAI\s*51\b/ig)||[]).length>1))));
     if(identityDrift){
-      response=/\b(?:who are you|what is your name|your name)\b/i.test(userRequest)
-        ? 'I’m KAI 51, HAxBRO’s AI assistant. What can I help you with?'
-        : 'I’m KAI 51. Let me give you a clear answer without the repeated identity text.';
+      throw new Error('Neural model produced inconsistent identity text after generation.');
     }
     if(!response) throw new Error('KAI 51 neural model returned an empty response');
     return {

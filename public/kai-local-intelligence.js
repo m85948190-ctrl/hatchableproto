@@ -1,7 +1,7 @@
 (() => {
   /* KAI 51 LOCAL: fast evidence retrieval + neural conversation.
      This file routes and gathers evidence; it must not fabricate a response from phrase rules. */
-  const VERSION='kai51-local-evidence-synthesis-v16-model-timeout-and-context-fix';
+  const VERSION='kai51-local-evidence-synthesis-v17-context-routing-no-date-math';
   const clean=(v,n=9000)=>String(v??'').replace(/\u0000/g,'').trim().slice(0,n);
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
@@ -37,17 +37,26 @@
   // Conversational memory recall is handled by the neural model using userMemoryPrompt().
   // Source extraction is not a final answer: the retrieved evidence always goes to the neural synthesizer.
 
-  function shouldSearch(message){
+  function isConversationalFollowup(message,history=[]){
+    const t=clean(message,1200).toLowerCase();
+    if(/\b(?:why are you asking me|why did you ask me|why do you keep asking|why are you repeating|what did i just say|i just said|you just asked|you asked me|your last answer|your previous answer|what do you mean by that|why did you say that|that doesn't answer|you ignored what i said)\b/i.test(t)) return true;
+    const recent=Array.isArray(history)?history.slice(-4):[];
+    const hasRecentAssistant=recent.some(x=>/^(?:bot|assistant|ai|model)$/i.test(String(x?.who||x?.role||x?.sender||'')));
+    const refersBack=/\b(?:you|your|that|this|it|same|again|already|just said|last reply|previous reply)\b/i.test(t);
+    const explicitResearch=/\b(?:search|research|look up|latest|recent|today|news|price|weather|current|official source|verify online|find sources)\b/i.test(t);
+    return hasRecentAssistant && refersBack && !explicitResearch && t.split(/\s+/).length<=22;
+  }
+
+  function shouldSearch(message,history=[]){
     const t=clean(message).toLowerCase();
-    // Keep explicit memory commands local, but let the neural model handle ordinary
-    // conversation. Research broad factual questions instead of relying on a narrow
-    // list of exact trigger phrases. Creative/editing requests do not need web lookup.
+    // Conversational references belong to the ongoing dialogue, not the web-search lane.
+    if(isConversationalFollowup(t,history)) return false;
     if(/^\s*(?:please\s+)?(?:remember|forget)\b/i.test(t)) return false;
     if(/\b(?:write|draft|rewrite|polish|translate|summarize|format|generate|create|compose|brainstorm)\b/i.test(t) && !/\b(?:latest|current|today|recent|news|price|statistics|research|verify|sources?)\b/i.test(t)) return false;
     if(/^(?:hi|hello|hey|yo|good morning|good afternoon|good evening|thanks|thank you|thx|ok|okay|sure|yes|yeah|yep|no|nah|got it)[!. ]*$/i.test(t)) return false;
     if(/^(?:how are you|what'?s up|what are you doing|are you there|who are you|what(?:'s| is) your name|what can you do|what do you think|can we talk|let'?s talk|can you help me)[?.! ]*$/i.test(t)) return false;
     if(/\b(?:what do you remember about me|what answer style do i prefer|my name is|call me|i prefer|i like|i feel|i'm bored|i am bored|rough day|bad day|need someone to talk)\b/i.test(t)) return false;
-    return /\?|\b(?:what|who|where|when|why|how|which|explain|define|compare|contrast|analy[sz]e|investigate|research|look up|find out|verify|check|search|tell me about|teach me|describe|overview|latest|recent|today|news|price|cost|version|release|update|current|weather|according to|statistics|study|paper|official|history|fact|facts|population|capital|meaning|evidence|source)\b/i.test(t);
+    return /\b(?:explain|define|compare|contrast|analy[sz]e|investigate|research|look up|find out|verify|check|search|tell me about|teach me|describe|overview|latest|recent|today|news|price|cost|version|release|update|current|weather|according to|statistics|study|paper|official|history|fact|facts|population|capital|meaning|evidence|source|what causes|causes|who is|where is|when did|when was|why does|why do|why is|why are|how does|how do|how is|how are)\b/i.test(t);
   }
 
   async function searchWeb(query,mode='fast',signal){
@@ -119,6 +128,8 @@
 
   function calculateExpression(message){
     const raw=String(message||'');
+    // ISO-like dates are not arithmetic expressions (e.g. 2011-06-28).
+    if(/\b(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/.test(raw)) return null;
     const number='[+-]?\\d[\\d,]*(?:\\.\\d+)?';
     const natural=raw.match(new RegExp('(?:what\\s+is|calculate|compute|work\\s+out)?\\s*('+number+')\\s*(times|multiplied\\s+by|plus|added\\s+to|minus|subtracted\\s+by|divided\\s+by|over|to\\s+the\\s+power\\s+of|[x×])\\s*('+number+')','i'));
     if(natural){
@@ -183,7 +194,7 @@
       return {lane:'local',handoff:false,response:calculation.expression.replace(/,/g,'')+' = '+formatted,provider:'KAI 51 LOCAL · calculator tool',model:'local arithmetic evaluation',local:true,localModel:false,tool:'calculator',sources:[],searchEngines:[],retrievalMs:0};
     }
     const query=queryFor(prompt);
-    const wantsSearch=shouldSearch(prompt);
+    const wantsSearch=shouldSearch(prompt,history);
     let web=null,wiki=[],files=[];
     if(wantsSearch){
       hooks.onStage?.('searching','KAI 51 · LOCAL is searching Google, Bing, DuckDuckGo and Wikipedia');
@@ -214,7 +225,7 @@
 
   window.HAxBROKaiLocalIntelligence={
     version:VERSION,ready:true,run,chat:run,
-    classify:(message)=>({research:shouldSearch(message),mode:'evidence-first-neural'}),
+    classify:(message,history=[])=>({research:shouldSearch(message,history),mode:'evidence-first-neural'}),
     status:()=>({ready:true,local:true,foundationalModel:false,mode:'fast-source-grounded-evidence-synthesis-with-on-demand-neural-fallback',version:VERSION})
   };
   window.dispatchEvent(new CustomEvent('haxbro:kai-local-ready',{detail:{version:VERSION}}));

@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = 'kai51-unified-controller-v27-360m-answer-timeout-fix';
+  const VERSION = 'kai51-unified-controller-v28-context-aware-chat-no-canned-output';
   const explicitWebRequest=message=>/\b(?:search (?:the )?(?:web|internet|online)|look up|latest|recent|today|news|price|cost|weather|current version|official source|verify online|check online|find sources|research current)\b/i.test(String(message||''));
   const userScope=()=>{const n=(localStorage.getItem('haxbro_username')||'anonymous-device').trim().toLowerCase().replace(/[^a-z0-9._-]/g,'_').slice(0,64)||'anonymous-device';return n;};
   const KEY = ()=>'haxbro:kai51:'+userScope()+':installation:v15-github-q4';
@@ -40,8 +40,8 @@
     return next;
   };
 
-  const ENGINE_VERSION='kai51-github-360m-q4-v37-primary-answer-quality';
-  const LOCAL_ENGINE_VERSION='kai51-local-135m-q4-v15-creative-fallback';
+  const ENGINE_VERSION='kai51-github-360m-q4-v38-context-history-fix';
+  const LOCAL_ENGINE_VERSION='kai51-local-135m-q4-v16-context-history-fix';
   if(window.HAxBROKai51Engine && window.HAxBROKai51Engine.version!==ENGINE_VERSION){
     window.HAxBROKai51Engine=null;
     window.__HAxBROKai51EnginePromise=null;
@@ -85,7 +85,7 @@
       :'KAI 51 GITHUB precision model starting'});
 
     const job=(async()=>{
-      const mod=await import('/kai51-local-engine.js?v=77');
+      const mod=await import('/kai51-local-engine.js?v=79');
       const engine=await mod.createKai51Engine({
         profile:isLocal?'local':'github',
         onProgress:p=>emit({profile:'heavy',...p}),
@@ -252,7 +252,7 @@
     let turn=null;
     let neuralPrompt=message;
     let serverResearch=null;
-    if(local?.classify?.(message)?.research){
+    if(local?.classify?.(message,history)?.research){
       try{
         hooks.onStage?.('searching','HAxBRO Chat API is gathering relevant pages');
         const apiResponse=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:hooks?.signal,body:JSON.stringify({message,history:JSON.stringify(history||[]).slice(-7000),mode:'normal',searchMode:hooks?.searchMode==='deep'?'deep':'fast',clientNeuralResearch:true})});
