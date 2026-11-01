@@ -1,14 +1,17 @@
-const VERSION = "kai51-gemma3-1b-webgpu-v1";
+const VERSION = "kai51-gemma3-1b-webgpu-v2";
 const MODEL = "Google Gemma 3 1B Instruct";
 const RUNTIME = "gemma-webgpu@0.1.0";
+const MODEL_BYTES = 1069306400;
 
 export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
   let runtime = null;
   let loading = null;
   let lastError = null;
+  let currentProgress = 0;
 
   const report = (progress,status) => {
-    try { onProgress({profile:"heavy",progress,status,file:""}); } catch {}
+    currentProgress = Math.max(currentProgress,Number(progress) || 0);
+    try { onProgress({profile:"heavy",progress:currentProgress,status,file:""}); } catch {}
   };
 
   // The Gemma runtime downloads GGUF weights with HTTP Range requests. Its
@@ -33,9 +36,9 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
             const part = await reader.read();
             if (part.done) { controller.close(); return; }
             transferred += part.value?.byteLength || 0;
-            const pct = totalBytes > 0 ? Math.min(88,5 + transferred / totalBytes * 83) : 5;
+            const pct = Math.min(88,5 + transferred / MODEL_BYTES * 83);
             const mb = (transferred / 1048576).toFixed(1);
-            const totalMb = totalBytes ? (totalBytes / 1048576).toFixed(0) : "—";
+            const totalMb = (MODEL_BYTES / 1048576).toFixed(0);
             report(pct, "Downloading Gemma weights to this computer · " + mb + " / " + totalMb + " MB");
             controller.enqueue(part.value);
           } catch(error) { controller.error(error); }
@@ -46,6 +49,14 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     };
     try { return await create(options); }
     finally { globalThis.fetch = originalFetch; }
+  }
+
+  function withTimeout(promise,ms,stage) {
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise((_,reject) => { timer = setTimeout(() => reject(new Error(stage + " timed out. Check the browser connection and GPU support, then retry.")),ms); })
+    ]).finally(() => clearTimeout(timer));
   }
 
   async function rawGenerate(prompt,options={}) {
@@ -75,23 +86,24 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       throw new Error("This device/browser does not support WebGPU. Use a recent Chrome or Edge on a compatible laptop, or Safari 18+ on a supported iPhone. KAI will not switch to cloud inference.");
     }
     loading = (async () => {
+      currentProgress = 0;
       report(2,"Preparing local Gemma WebGPU runtime");
-      const adapter = await navigator.gpu.requestAdapter();
+      const adapter = await withTimeout(navigator.gpu.requestAdapter(),30000,"WebGPU adapter initialization");
       if (!adapter) throw new Error("WebGPU is present, but this device did not provide a compatible GPU adapter.");
       report(5,"Loading Gemma runtime");
-      const mod = await import("https://esm.sh/" + RUNTIME);
+      const mod = await withTimeout(import("https://esm.sh/" + RUNTIME),90000,"Gemma runtime download");
       const create = mod.createGemmaEngine || mod.default?.createGemmaEngine;
       if (typeof create !== "function") throw new Error("The Gemma WebGPU package did not expose createGemmaEngine.");
-      runtime = await createWithTransferProgress(create,{
+      runtime = await withTimeout(createWithTransferProgress(create,{
         model:"1b",
         contextLength:2048,
         onProgress:p => {
           const loaded = Number(p?.loaded) || 0;
           const total = Number(p?.total) || 0;
-          const pct = total > 0 ? Math.min(88, 5 + loaded / total * 83) : 5;
+          const pct = total > 0 ? Math.min(88, 5 + loaded / total * 83) : currentProgress;
           report(pct,p?.status || "Downloading Gemma weights to this device");
         }
-      });
+      }),1200000,"Gemma model download and initialization");
       report(91,"Running Gemma local inference self-test");
       const check = await rawGenerate("Reply briefly with a short confirmation that KAI is ready.",{maxTokens:24,temperature:0,topP:1,toolsJson:"[]"});
       if (!check) throw new Error("Gemma loaded but returned an empty self-test response.");
