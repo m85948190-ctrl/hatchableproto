@@ -11,6 +11,43 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     try { onProgress({profile:"heavy",progress,status,file:""}); } catch {}
   };
 
+  // The Gemma runtime downloads GGUF weights with HTTP Range requests. Its
+  // progress callback only fires after each tensor/layer has been uploaded,
+  // leaving the UI apparently frozen at 5% during long first transfers.
+  async function createWithTransferProgress(create,options) {
+    const originalFetch = globalThis.fetch;
+    let transferred = 0;
+    let totalBytes = 0;
+    globalThis.fetch = async (input,init) => {
+      const response = await originalFetch.call(globalThis,input,init);
+      const url = typeof input === "string" ? input : (input?.url || "");
+      if (!url.includes("huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q8_0.gguf") || !response.body) return response; //\.co\/unsloth\/gemma-3-1b-it-GGUF\/resolve\/main\/gemma-3-1b-it-Q8_0\.gguf/i.test(url) || !response.body) return response;
+      const rangeTotal = Number(String(response.headers.get("content-range") || "").split("/").pop()) || 0; ///bytes\s+\d+-\d+\/(\d+)/i);
+      const length = Number(response.headers.get("content-length")) || 0;
+      if (rangeTotal) totalBytes = rangeTotal;
+      else if (!totalBytes && length) totalBytes = length;
+      const reader = response.body.getReader();
+      const stream = new ReadableStream({
+        async pull(controller) {
+          try {
+            const part = await reader.read();
+            if (part.done) { controller.close(); return; }
+            transferred += part.value?.byteLength || 0;
+            const pct = totalBytes > 0 ? Math.min(88,5 + transferred / totalBytes * 83) : 5;
+            const mb = (transferred / 1048576).toFixed(1);
+            const totalMb = totalBytes ? (totalBytes / 1048576).toFixed(0) : "—";
+            report(pct, "Downloading Gemma weights to this computer · " + mb + " / " + totalMb + " MB");
+            controller.enqueue(part.value);
+          } catch(error) { controller.error(error); }
+        },
+        cancel(reason) { return reader.cancel(reason); }
+      });
+      return new Response(stream,{status:response.status,statusText:response.statusText,headers:response.headers});
+    };
+    try { return await create(options); }
+    finally { globalThis.fetch = originalFetch; }
+  }
+
   async function rawGenerate(prompt,options={}) {
     if (!runtime) throw new Error("Gemma runtime is not initialized.");
     runtime.resetConversation();
@@ -45,7 +82,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       const mod = await import("https://esm.sh/" + RUNTIME);
       const create = mod.createGemmaEngine || mod.default?.createGemmaEngine;
       if (typeof create !== "function") throw new Error("The Gemma WebGPU package did not expose createGemmaEngine.");
-      runtime = await create({
+      runtime = await createWithTransferProgress(create,{
         model:"1b",
         contextLength:2048,
         onProgress:p => {

@@ -108,7 +108,7 @@
     hooks.onStage?.("gemma",IS_PHONE ? "Loading SmolLM2 135M locally on this phone" : "Loading Google Gemma 3 1B locally on this computer");
     emit({progress:1,status:IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Gemma 3 1B · local WebGPU"});
     enginePromise = (async () => {
-      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=2" : "/kai51-local-engine.js?v=82";
+      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=2" : "/kai51-local-engine.js?v=83";
       const mod = await import(moduleUrl);
       const create = IS_PHONE ? mod.createKai51PhoneEngine : mod.createKai51Engine;
       if (typeof create !== "function") throw new Error(IS_PHONE ? "Phone model engine is missing createKai51PhoneEngine." : "Gemma engine module is missing createKai51Engine.");
