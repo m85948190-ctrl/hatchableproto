@@ -52,7 +52,7 @@
 
   function render(d={}){
     const nativeState=window.HAxBROKai51Bootstrap?.state?.();
-    const phoneModel=window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android";
+    const phoneModel=window.HAxBRODeviceProfile?.isPhone===true||window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android";
     const modelName=nativeState?.model||(phoneModel?"SmolLM2 135M Instruct":"Gemma 3 1B");
     // READY is a durable installation state, not merely an in-memory runtime state.
     if(nativeState?.installed && nativeState?.verified && nativeState?.status==='ready'){
@@ -65,7 +65,7 @@
       const title=document.getElementById('kai51BootTitle');
       const body=document.getElementById('kai51BootText');
       if(title) title.textContent='KAI 51 · LOCAL RETRIEVAL READY';
-      if(body) body.textContent='Gemma 3 1B starts downloading automatically as soon as HAxBRO opens and runs locally on this device.';
+      if(body) body.textContent='Your device-optimized KAI model downloads automatically when HAxBRO opens and runs locally on this device.';
       document.getElementById('kai51BootFill').style.width='0%';
       document.getElementById('kai51BootPercent').textContent='0%';
       document.getElementById('kai51BootStatus').textContent='LOCAL retrieval ready · neural model not yet verified';
@@ -79,7 +79,7 @@
     const title=document.getElementById('kai51BootTitle');
     const body=document.getElementById('kai51BootText');
     if(title) title.textContent='KAI 51 · '+modelName.toUpperCase()+' IS LOADING';
-    if(body) body.textContent=phoneModel?'SmolLM2 135M downloads directly to this phone (about 135 MB) and runs locally. Later visits may reuse the browser cache.':'Gemma 3 1B downloads directly to this computer (about 1 GB) and runs locally. Later visits may reuse the browser cache.';
+    if(body) body.textContent=phoneModel?'SmolLM2 135M downloads directly to this phone (about 118 MB with WebGPU; about 137 MB in CPU fallback) and runs locally. Later visits may reuse the browser cache.':'Gemma 3 1B downloads directly to this computer (about 1 GB) and runs locally. Later visits may reuse the browser cache.';
     document.getElementById('kai51BootFill').style.width=pct+'%';
     document.getElementById('kai51BootPercent').textContent=pct+'%';
     document.getElementById('kai51BootStatus').textContent=String(d.status||'Preparing KAI 51');

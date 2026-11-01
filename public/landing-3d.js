@@ -1,5 +1,5 @@
 (() => {
-  const canvas=document.getElementById('haxbro3d'); if(!canvas||!window.THREE)return;
+  const canvas=document.getElementById('haxbro3d'); if(!canvas||!window.THREE||getComputedStyle(canvas).display==='none'||window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)return;
   const T=window.THREE, scene=new T.Scene(), camera=new T.PerspectiveCamera(34,1,.1,100); camera.position.set(0,.15,8.5);
   const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(devicePixelRatio||1,2)); renderer.outputColorSpace=T.SRGBColorSpace;
   const root=new T.Group(); scene.add(root);

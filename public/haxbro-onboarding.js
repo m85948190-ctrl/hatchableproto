@@ -9,7 +9,7 @@ if(entry&&intro){
   intro.hidden=false;
   intro.style.visibility='';
   if(usernameGate)usernameGate.hidden=true;
-  intro.querySelector('video')?.play?.().catch(()=>{});
+  intro.querySelector('video')?.pause?.();
   window.dispatchEvent(new CustomEvent('haxbro:onboarding-entry'));
 }
 const slides=[
@@ -29,7 +29,7 @@ function renderProgress(){
  const pct=document.getElementById('hfsPercent');if(pct)pct.textContent=Math.round(currentProgress)+'%';
  }
 function progressFrom(e){
- if(modelReady()){currentProgress=100;currentStatus='KAI 51 local model ready · larger model lanes may continue preparing';renderProgress();return}
+ if(modelReady()){currentProgress=100;currentStatus='KAI 51 local model ready on this device';renderProgress();return}
  const d=e?.detail||{};
  if(d.status)currentStatus=String(d.status).slice(0,140);
  const p=Number(d.progress);
@@ -38,11 +38,11 @@ function progressFrom(e){
 }
 window.addEventListener('haxbro:kai-local-progress',progressFrom);
 window.addEventListener('haxbro:kai51-bootstrap',progressFrom);
-window.addEventListener('haxbro:kai51-ready',()=>{currentProgress=100;currentStatus='KAI 51 local model ready · larger model lanes may continue preparing';renderProgress()});
+window.addEventListener('haxbro:kai51-ready',()=>{currentProgress=100;currentStatus='KAI 51 local model ready on this device';renderProgress()});
 function ensureSequence(){
  let root=document.getElementById('haxbroFeatureSequence');if(root)return root;
  root=document.createElement('section');root.id='haxbroFeatureSequence';root.hidden=true;root.setAttribute('aria-label','Discover HAxBRO AI');
- root.innerHTML='<header class="hfs-top"><div class="hfs-brand"><img src="/logo-symbol.svg?v=753" alt=""><span>HAxBRO <span style="color:#75e9ff">AI</span></span></div><div class="hfs-top-label">YOUR PERSONAL AI WORKSPACE</div></header><main class="hfs-main" id="hfsMain"><div class="hfs-copy"><div class="hfs-step" id="hfsStep"></div><h1 id="hfsTitle"></h1><p id="hfsBody"></p><div class="hfs-proof" id="hfsTags"></div></div><div class="hfs-visual"><img id="hfsImage" alt=""></div></main><footer class="hfs-bottom"><div class="hfs-bottom-row"><div class="hfs-dots" role="progressbar" aria-label="Feature introduction" aria-valuemin="1" aria-valuemax="4" aria-valuenow="1" id="hfsDots"></div><div class="hfs-slide-nav"><button id="hfsPrev" type="button" aria-label="Previous feature" title="Previous feature">←</button><span id="hfsSlideCount">01 / 04</span><button id="hfsNext" type="button" aria-label="Next feature" title="Next feature">→</button></div><div class="hfs-status"><i></i><span id="hfsFooterStatus">Preparing your personal KAI copy…</span></div></div><div class="hfs-footer-note">MODEL DOWNLOAD AND INITIALIZATION CONTINUE IN THE BACKGROUND · LOCAL COPIES ARE SAVED WHEN THE BROWSER ALLOWS</div></footer>';
+ root.innerHTML='<header class="hfs-top"><div class="hfs-brand"><img src="/logo-symbol.svg?v=753" alt=""><span>HAxBRO <span style="color:#75e9ff">AI</span></span></div><div class="hfs-top-label">YOUR PERSONAL AI WORKSPACE</div><button id="hfsSkip" class="hfs-skip" type="button">SKIP TOUR</button></header><main class="hfs-main" id="hfsMain"><div class="hfs-copy"><div class="hfs-step" id="hfsStep"></div><h1 id="hfsTitle"></h1><p id="hfsBody"></p><div class="hfs-proof" id="hfsTags"></div></div><div class="hfs-visual"><img id="hfsImage" alt=""></div></main><footer class="hfs-bottom"><div class="hfs-bottom-row"><div class="hfs-dots" role="progressbar" aria-label="Feature introduction" aria-valuemin="1" aria-valuemax="4" aria-valuenow="1" id="hfsDots"></div><div class="hfs-slide-nav"><button id="hfsPrev" type="button" aria-label="Previous feature" title="Previous feature">←</button><span id="hfsSlideCount">01 / 04</span><button id="hfsNext" type="button" aria-label="Next feature" title="Next feature">→</button></div><div class="hfs-status"><i></i><span id="hfsFooterStatus">Preparing your personal KAI copy…</span></div></div><div class="hfs-footer-note">MODEL DOWNLOAD AND INITIALIZATION CONTINUE IN THE BACKGROUND · LOCAL COPIES ARE SAVED WHEN THE BROWSER ALLOWS</div></footer>';
  document.body.appendChild(root);return root;
 }
 let root=null,slideIndex=0,slideTimer=null,waitTimer=null,readyTimer=null,started=false,tourComplete=false;
@@ -64,8 +64,8 @@ function showReady(){
  const main=document.getElementById('hfsMain');if(!main||main.dataset.ready==='yes')return;
  main.dataset.ready='yes';
  if(slideTimer){clearInterval(slideTimer);slideTimer=null}if(waitTimer){clearTimeout(waitTimer);waitTimer=null}
- main.innerHTML='<div class="hfs-ready"><div class="hfs-ready-mark" aria-hidden="true">✓</div><div class="hfs-step">DEVICE MODEL VERIFIED</div><h1>Your KAI is <span style="color:#75e9ff">ready.</span></h1><p>The local neural runtime passed its readiness check. Your browser can reuse cached model files on future visits when storage remains available. Larger model lanes may continue preparing in the background.</p><div class="hfs-progress"><span style="width:100%"></span></div><div class="hfs-ready-status" id="hfsReadyStatus">KAI 51 neural model verified and ready</div><button type="button" class="hbo-enter hfs-enter" id="hfsEnterWorkspace">ENTER HAxBRO <span aria-hidden="true">↗</span></button></div><div class="hfs-visual"><img src="/onboarding-ecosystem.svg" alt="HAxBRO connected AI ecosystem illustration"></div>';
- currentProgress=100;currentStatus='KAI 51 local model ready · larger model lanes may continue preparing';renderProgress();
+ main.innerHTML='<div class="hfs-ready"><div class="hfs-ready-mark" aria-hidden="true">✓</div><div class="hfs-step">DEVICE MODEL VERIFIED</div><h1>Your KAI is <span style="color:#75e9ff">ready.</span></h1><p>The device-optimized local neural runtime passed its readiness check. Your browser can reuse cached model files on future visits when storage remains available.</p><div class="hfs-progress"><span style="width:100%"></span></div><div class="hfs-ready-status" id="hfsReadyStatus">KAI 51 neural model verified and ready</div><button type="button" class="hbo-enter hfs-enter" id="hfsEnterWorkspace">ENTER HAxBRO <span aria-hidden="true">↗</span></button></div><div class="hfs-visual"><img src="/onboarding-ecosystem.svg" alt="HAxBRO connected AI ecosystem illustration"></div>';
+ currentProgress=100;currentStatus='KAI 51 local model ready on this device';renderProgress();
  document.getElementById('hfsEnterWorkspace')?.addEventListener('click',finish);
 }
 function showWait(){
@@ -92,7 +92,7 @@ function finish(){
 function beginSequence(){
  if(started)return;started=true;
  if(intro){intro.classList.add('hci-exit');intro.style.opacity='0';intro.style.visibility='hidden';intro.querySelector('video')?.pause();}
- root=ensureSequence();root.hidden=false;root.style.opacity='1';renderSlide(0);
+ root=ensureSequence();root.hidden=false;root.style.opacity='1';renderSlide(0);root.querySelector('#hfsSkip')?.addEventListener('click',finish);
  root.querySelector('#hfsPrev')?.addEventListener('click',()=>{if(slideTimer){clearInterval(slideTimer);slideTimer=null}renderSlide(Math.max(0,slideIndex-1))});
  root.querySelector('#hfsNext')?.addEventListener('click',()=>{if(slideTimer){clearInterval(slideTimer);slideTimer=null}if(slideIndex<slides.length-1)renderSlide(slideIndex+1);else{tourComplete=true;finish()}});
  // Keep the feature photos under visitor control. The arrows advance instantly;
@@ -106,18 +106,18 @@ function setIntroLabel(){
  const state=window.HAxBROKai51Bootstrap?.state?.();
  const seconds=Number(btn.dataset.remaining||0);
  const timer=intro.querySelector('[data-hci-countdown]');
- if(seconds>0){btn.disabled=true;btn.textContent='CONTINUE AFTER '+seconds+'s';if(timer)timer.textContent='VIDEO EXPERIENCE · '+seconds+' SECONDS REMAINING';return}
+ if(seconds>0){btn.disabled=true;btn.textContent='CONTINUE AFTER '+seconds+'s';if(timer)timer.textContent='WELCOME EXPERIENCE · '+seconds+' SECONDS REMAINING';return}
  btn.disabled=false;btn.textContent='CONTINUE TO FEATURES →';if(timer)timer.textContent=modelReady()?'KAI 51 LOCAL MODEL READY':'KAI IS LOADING IN THE BACKGROUND';
 }
 if(intro){
  const btn=intro.querySelector('.hci-continue');
  if(btn){
-  let left=20;btn.dataset.remaining='20';setIntroLabel();
+  let left=2;btn.dataset.remaining='2';setIntroLabel();
   const tick=setInterval(()=>{left=Math.max(0,left-1);btn.dataset.remaining=String(left);setIntroLabel();if(left===0)clearInterval(tick)},1000);
   btn.addEventListener('click',()=>{if(btn.disabled)return;beginSequence()});
  }
- intro.querySelector('video')?.play?.().catch(()=>{});
+ intro.querySelector('video')?.pause?.();
 }
-window.addEventListener('haxbro:kai51-ready',()=>{currentProgress=100;currentStatus='KAI 51 local model ready · larger model lanes may continue preparing';renderProgress()});
+window.addEventListener('haxbro:kai51-ready',()=>{currentProgress=100;currentStatus='KAI 51 local model ready on this device';renderProgress()});
 window.addEventListener('haxbro:kai51-bootstrap',e=>{if(e?.detail?.status==='ready'&&modelReady()){currentProgress=100;currentStatus='KAI 51 neural model verified and ready';renderProgress()}});
 })();

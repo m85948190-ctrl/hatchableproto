@@ -10,7 +10,7 @@
   }
   function render(d={}){
     const state=window.HAxBROKai51Bootstrap?.state?.()||{};
-    const modelName=String(state.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M":"Gemma 3 1B")).toUpperCase();
+    const modelName=String(state.model||((window.HAxBRODeviceProfile?.isPhone||window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M":"Gemma 3 1B")).toUpperCase();
     const x=mount();
     if(d.profile==='largest'){
       x.classList.remove('is-ready');

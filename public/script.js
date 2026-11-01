@@ -278,7 +278,10 @@ if(input)input.value='';resize();try{if(!overdrive){
       try{
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
         kaiActivitySet('thinking','running',activeModelName+' is understanding your message and recent conversation.');
-        mark('router','KAI 51 · '+activeModelName,'Loading or using the one local conversational model.','running');
+        mark('router','KAI 51 · '+activeModelName,'Checking the connected HAxBRO workspace tools.','running');
+        let workspaceHandled=false;
+        try{workspaceHandled=!!(await window.HAxBROKai51WorkspaceTools?.route?.(value));}catch(workspaceError){console.warn('KAI workspace tool routing failed; continuing with local chat.',workspaceError);}
+        if(workspaceHandled){kaiActivitySet('router','done','The matching HAxBRO workspace tool was opened and received your request.');finish({sources:[],local:true,workspaceTool:true,model:activeModelName});return true;}
         const result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
           searchMode:opts.searchMode||'normal',
           onSources:sources=>kaiActivityResearch(sources),
@@ -295,21 +298,21 @@ if(input)input.value='';resize();try{if(!overdrive){
             if(stage==='searching')kaiActivitySet('thinking','done');
             if(stage==='analyzing')kaiActivitySet('searching','done');
             if(stage==='composing')kaiActivitySet('analyzing','done');
-            mark(keys[stage]||'router',labels[stage]||'Gemma 3 1B',detail||'Processing this stage','running');
+            mark(keys[stage]||'router',labels[stage]||activeModelName,detail||'Processing this stage','running');
           }
         });
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
         if(!result?.response)throw new Error(activeModelName+' returned no response.');
         kaiActivitySet('router','done',activeModelName+' generated the answer locally on this device.');
         kaiActivitySet('composing','done','Response completed by '+activeModelName+'.');
-        finish({sources:result.sources||[],local:true,provider:result.provider||'Google Gemma 3 1B · local WebGPU',model:result.model||'Gemma 3 1B',research:!!result.research});
+        finish({sources:result.sources||[],local:true,provider:result.provider||activeModelName+' · local on-device inference',model:result.model||activeModelName,research:!!result.research});
         addMessage(result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
         return true;
       }catch(e){
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
         console.warn('KAI local model failed',e);
         kaiActivitySet('router','error',activeModelName+' could not complete this response on this device.');
-        const failureDetails=String(e?.message||e||'unknown Gemma failure').slice(0,900);
+        const failureDetails=String(e?.message||e||'unknown local model failure').slice(0,900);
         finish({sources:[],local:true,provider:activeModelName+' · local WebGPU',error:failureDetails});
         addMessage('KAI could not complete this response with '+activeModelName+' on this device. No cloud AI fallback was used. Details: '+failureDetails,'bot');
         return true;
