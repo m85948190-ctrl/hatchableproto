@@ -35,7 +35,7 @@
     el.setAttribute('aria-live','polite');
     el.innerHTML=`
       <div class="kai51-boot-kicker"><span class="kai51-boot-dot"></span><span>HAxBRO AI</span></div>
-      <div id="kai51BootTitle" class="kai51-boot-title">KAI 51 · REAL INTELLIGENCE MODEL IS LOADING</div>
+      <div id="kai51BootTitle" class="kai51-boot-title">KAI 51 · GEMMA 3 1B IS LOADING</div>
       <div id="kai51BootText" class="kai51-boot-text"></div>
       <div class="kai51-boot-bar"><i id="kai51BootFill"></i></div>
       <div class="kai51-boot-meta"><b id="kai51BootPercent">0%</b><span id="kai51BootStatus">Preparing KAI 51</span></div>`;
@@ -77,7 +77,7 @@
     const title=document.getElementById('kai51BootTitle');
     const body=document.getElementById('kai51BootText');
     if(title) title.textContent='KAI 51 · REAL INTELLIGENCE MODEL IS LOADING';
-    if(body) body.textContent='The full KAI 51 model is downloading from the HAxBRO GitHub Release and will be cached on this device. No manual download is required. After the first install, KAI 51 restores from the local browser cache.';
+    if(body) body.textContent='Gemma 3 1B is downloaded directly to this device and runs locally. The first download is about 1 GB; later visits may reuse the browser cache.';
     document.getElementById('kai51BootFill').style.width=pct+'%';
     document.getElementById('kai51BootPercent').textContent=pct+'%';
     document.getElementById('kai51BootStatus').textContent=String(d.status||'Preparing KAI 51');
@@ -90,7 +90,7 @@
   }else{
     render({progress:initial?.status==='installing'?5:0,status:initial?.status==='installing'
       ?'Restoring KAI 51 from this device…'
-      :'KAI LITE IS ACTIVE · KAI 51 is loading in the background'});
+      :'GEMMA 3 1B LOADS LOCALLY WHEN YOU FIRST CHAT'});
   }
 
   window.addEventListener('haxbro:kai-local-progress',e=>render(e.detail||{}));

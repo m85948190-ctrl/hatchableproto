@@ -14,13 +14,13 @@
     if(d.profile==='largest'){
       x.classList.remove('is-ready');
       const pct=x.querySelector('.hook-pct');if(pct)pct.textContent=clamp(d.progress)+'%';
-      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· '+String(d.status||'GOOGLE GEMMA 3 270M INSTALLING').toUpperCase();
+      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· '+String(d.status||'GEMMA 3 1B INITIALIZING').toUpperCase();
       return;
     }
     if(state.status==='ready'&&state.installed&&state.verified){
       x.classList.add('is-ready');
       const p=x.querySelector('.hook-pct');if(p)p.textContent='100%';
-      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· KAI 51 READY · GITHUB Q4';
+      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· GEMMA 3 1B READY · LOCAL';
       return;
     }
     x.classList.remove('is-ready');
@@ -30,15 +30,17 @@
     if(lite){
       const stage=String(d.status||'').toLowerCase();
       if(d.profile==='local'){
-        lite.textContent='· LOCAL LAYER READY';
+        lite.textContent='· GEMMA LOCAL ENGINE';
       }else if(state.status==='error'||/failed|error/i.test(stage)){
         lite.textContent='· MODEL ERROR';
       }else if(/download/i.test(stage)){
-        lite.textContent='· MODEL DOWNLOADING';
+        lite.textContent='· GEMMA 3 1B DOWNLOADING';
+      }else if(state.status==='installing'){
+        lite.textContent='· GEMMA 3 1B INITIALIZING';
       }else if(state.status==='ready'){
         lite.textContent='· KAI 51 READY';
       }else{
-        lite.textContent='· LOADING NEURAL MODEL';
+        lite.textContent='· GEMMA 3 1B · READY WHEN NEEDED';
       }
     }
   }

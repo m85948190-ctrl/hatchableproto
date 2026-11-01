@@ -242,9 +242,9 @@ function showAppPlatformChoices(value){
   ]);
 }
 async function sendChat(text,opts={}){let value=String(text||'').trim();const attachedImage=window.HAxBROPendingImage||null;if(!value&&!attachedImage)return false;if(attachedImage&&!value)value='Please analyze the attached image in detail.';if(sendInFlight&&!opts.internalRetry)return true;const savedModelChoice=localStorage.getItem(haxbroUserKey('model_choice'));if(window.HAxBROSelectedModel==='kai-lite'||savedModelChoice==='kai-lite'){window.HAxBROSelectedModel='kai-router';localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}const now=Date.now();if(value===lastSendValue&&now-lastSendAt<5000&&!opts.internalRetry)return true;const attemptId=opts.internalRetry?sendAttemptId:sendAttemptId+1;if(!opts.internalRetry){sendAttemptId=attemptId;activeChatController=new AbortController();window.HAxBROActiveChatSignal=activeChatController.signal;clearTimeout(sendWatchdogTimer);sendInFlight=true;lastSendValue=value;lastSendAt=now;const watchdogMs=360000;sendWatchdogTimer=setTimeout(()=>{if(sendInFlight&&sendAttemptId===attemptId){try{activeChatController?.abort()}catch{}try{activeRealtimeClient?.close?.()}catch{}try{activeStreamReader?.cancel?.()}catch{}sendInFlight=false;setBusy(false);addMessage('KAI did not finish within '+Math.round(watchdogMs/1000)+' seconds. The selected model run was stopped; no web-only substitute was used. You can retry or check the selected model.','bot');}},watchdogMs)}if(await checkAdmin69(value)){sendInFlight=false;return true}ensureChat();
-/* Legacy KAI LITE selections are normalized to the real KAI neural router above. */
-/* No hard-coded creator/identity response. Every normal question is handled by the selected KAI intelligence/fallback chain. */
-/* Legacy KAI LITE model selection is no longer routed to a search-only answer. */
+/* KAI uses one conversational model: Gemma 3 1B running locally on this device. */
+/* No hard-coded creator/identity response. Every normal question is handled by the Gemma conversational model. */
+/* Web search is a tool used by Gemma; it is never a replacement answer lane. */
 if(!opts.fromChoice&&!overdrive&&value.length>0&&!kaiChoiceSearchLike(value)&&/\b(?:what|who|when|where|why|how|which|can|does|do|is|are|explain|define|meaning|latest|recent|news|search|find|look\s*(?:up|for)|price|cost|weather|version|release|update)\b/i.test(value)){
   opts.searchMode='quick';
 }
@@ -263,143 +263,58 @@ if(input)input.value='';resize();try{if(!overdrive){
          LOCAL is the first lane. GITHUB is the precision neural lane.
          LITE is independent and remains the final web-only recovery lane.
          The UI receives one ordered activity stream so stages cannot overwrite/jumble each other. */
-      const savedChoiceRaw=window.HAxBROSelectedModel||localStorage.getItem(haxbroUserKey('model_choice'))||'kai-router';
-      const savedChoice=['kai-router','kai-local','kai-github'].includes(savedChoiceRaw)?savedChoiceRaw:'kai-router';
-      const selectedModel=savedChoice;
-      if(savedChoice!==savedChoiceRaw){window.HAxBROSelectedModel='kai-router';localStorage.setItem(haxbroUserKey('model_choice'),'kai-router');}
-      if(selectedModel==='kai-router'||selectedModel==='kai-local'||selectedModel==='kai-github'){
-        setBusy(true,selectedModel==='kai-local'?'light':'heavy');
-        kaiActivityStart(selectedModel==='kai-local'?'light':'heavy');
-        const history=active()?.items?.slice(-12)||[];
-        const mark=(key,label,detail,state='running')=>{
-          if(state==='running') kaiActivityStep(key,label,detail,'','running');
-          else kaiActivitySet(key,state,detail);
-        };
-        const finish=payload=>{try{kaiActivityFinish(payload||{});}catch{}};
-        try{
-          let result=null;
-          const runtimeState=window.HAxBROKai51Bootstrap?.state?.()||{};if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-          /* Never substitute KAI LITE just because a neural model is not ready. Start the selected KAI 51 lane and let its bounded model loader report real progress/failure. */
-          if(activeChatController?.signal.aborted)throw new DOMException('Response stopped by user','AbortError');
-          if(selectedModel==='kai-router'){
-            kaiActivitySet('thinking','done');
-            const selectedLabel=selectedModel==='kai-github'?'KAI 51 360M':selectedModel==='kai-local'?'KAI 51 135M':'KAI Router · 360M primary → 135M fallback';
-            mark('router',selectedLabel,'Try the selected model first; if it fails or returns no usable answer, automatically try the backup chain.','running');
-            result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
-              searchMode:opts.searchMode||'normal',
-              preferred:'kai-github',
-              onSources:sources=>kaiActivityResearch(sources),
-              signal:activeChatController?.signal,
-              onStage:(stage,detail)=>{
-                const labels={searching:'Searching Google, Bing, DuckDuckGo and Wikipedia',analyzing:'Reading and comparing source pages',composing:'KAI is reasoning over the gathered evidence','local-neural':'Running KAI 51 LOCAL neural model','local-neural-progress':'Loading KAI 51 LOCAL weights',github:'Using KAI 51 GitHub neural backup','router-fallback':'Switching to the next genuine neural model'};
-                const keys={searching:'searching',analyzing:'analyzing',composing:'composing','local-neural':'local-neural','local-neural-progress':'local-neural-progress',github:'github','router-fallback':'router-fallback'};
-                const key=keys[stage]||'router';
-                mark(key,labels[stage]||selectedLabel,detail||'Processing this stage','running');
-              },
-              onHandoff:reason=>mark('github','KAI 51 GitHub neural backup',reason||'Local model needs the next neural lane','running')
-            });
-          }else if(selectedModel==='kai-local'){
-            kaiActivitySet('thinking','done');
-            kaiActivitySet('thinking','running','Reading your request and identifying the next step.');
-            result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
-              searchMode:opts.searchMode||'normal',
-              preferred:'kai-local',
-              onSources:sources=>kaiActivityResearch(sources),
-              signal:activeChatController?.signal,
-              onStage:(stage,detail)=>{
-                const labels={
-                  understanding:'Thinking',
-                  searching:'Searching the web',
-                  analyzing:'Checking the gathered information',
-                  composing:'Preparing an answer',
-                  github:'Routing to GitHub model',
-                  'local-neural':'Running KAI 51 LOCAL',
-                  'local-neural-progress':'Loading local model',
-                  lite:'Recovering with KAI Lite'
-                };
-                const isMathPrompt=/[0-9].*(?:[+*/×÷−-]|\b(?:calculate|solve|arithmetic|multiply|divide|add|subtract)\b)|\b(?:calculate|solve|arithmetic)\b/i.test(String(value||''));
-                const stageDetails={
-                  understanding:isMathPrompt?'Reading the numbers and operators in your expression.':'Identifying the request type and relevant context.',
-                  searching:'Searching for sources relevant to your question.',
-                  analyzing:isMathPrompt?'Working through the requested calculation.':'Reviewing the information gathered so far.',
-                  composing:'Organizing the result into a clear response.',
-                  github:'Starting the selected GitHub model lane.',
-                  'local-neural':'Running local neural inference in this browser.',
-                  'local-neural-progress':'Waiting for the local model to report its next progress update.',
-                  lite:'Using KAI Lite as the recovery lane.'
-                };
-                const key=stage==='understanding'?'thinking':stage==='github'?'github':stage==='lite'?'lite':stage;
-                const label=labels[stage]||'KAI 51 · '+String(stage||'working');
-                const progressDetail=String(detail||stageDetails[stage]||'Processing this step.');
-                if(stage==='searching'){kaiActivitySet('thinking','done');}
-                if(stage==='analyzing'){kaiActivitySet('searching','done');}
-                if(stage==='composing'){kaiActivitySet('analyzing','done');}
-                if(stage==='github'){kaiActivitySet('thinking','done');}
-                if(stage==='local-neural'||stage==='local-neural-progress'){kaiActivitySet('thinking','done');}
-                mark(key,label,progressDetail,'running');
-              },
-              onHandoff:reason=>{
-                kaiActivitySet('understanding','done','LOCAL → GITHUB handoff');
-                mark('github','Routing to GitHub model',reason||'LOCAL requested deeper precision','running');
-              }
-            });
-          }else{
-            kaiActivitySet('thinking','done');
-            mark('github','KAI 51 360M primary','Run the selected 360M model first, then the 135M neural backup if needed.','running');
-            result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
-              searchMode:opts.searchMode||'normal',
-              preferred:'kai-github',
-              onSources:sources=>kaiActivityResearch(sources),
-              signal:activeChatController?.signal,
-              onStage:(stage,detail)=>{
-                const labels={searching:'Searching the web',analyzing:'Reading source pages',composing:'KAI is interpreting the gathered evidence',router:'Running KAI 51 360M primary', 'router-fallback':'Switching to the 135M backup'};
-                const key=stage==='router'?'github':stage==='router-fallback'?'router-fallback':stage;
-                mark(key,labels[stage]||'KAI 51 · '+String(stage||'working'),detail||'Processing this stage','running');
-              }
-            });
+      const selectedModel='kai-router';
+      window.HAxBROSelectedModel='kai-router';
+      try{localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}catch{}
+      setBusy(true,'heavy');
+      kaiActivityStart('heavy');
+      const history=active()?.items?.slice(-12)||[];
+      const mark=(key,label,detail,state='running')=>{
+        if(state==='running')kaiActivityStep(key,label,detail,'','running');
+        else kaiActivitySet(key,state,detail);
+      };
+      const finish=payload=>{try{kaiActivityFinish(payload||{});}catch{}};
+      try{
+        if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
+        kaiActivitySet('thinking','running','Gemma is understanding your message and recent conversation.');
+        mark('router','KAI 51 · Gemma 3 1B','Loading or using the one local conversational model.','running');
+        const result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
+          searchMode:opts.searchMode||'normal',
+          onSources:sources=>kaiActivityResearch(sources),
+          signal:activeChatController?.signal,
+          onStage:(stage,detail)=>{
+            const labels={
+              gemma:'Loading Gemma 3 1B locally',
+              thinking:'Gemma is understanding the request',
+              searching:'Searching and reading webpages',
+              analyzing:'Gemma is evaluating retrieved evidence',
+              composing:'Gemma is writing the response'
+            };
+            const keys={searching:'searching',analyzing:'analyzing',composing:'composing'};
+            if(stage==='searching')kaiActivitySet('thinking','done');
+            if(stage==='analyzing')kaiActivitySet('searching','done');
+            if(stage==='composing')kaiActivitySet('analyzing','done');
+            mark(keys[stage]||'router',labels[stage]||'Gemma 3 1B',detail||'Processing this stage','running');
           }
-          if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-          if(result?.response){
-            if(result.lane==='local'){
-              kaiActivitySet('understanding','done','LOCAL understood the request');
-              kaiActivitySet('composing','done','LOCAL response composed');
-              if(result.fallbackLane==='github'){
-                kaiActivitySet('github','done','GITHUB is warming in the background; LOCAL answered this turn');
-                kaiActivitySet('local-neural','done','KAI 51 LOCAL generated this response while GITHUB installs');
-              }else{
-                kaiActivitySet('local-neural','done','KAI 51 LOCAL generated the response on this device');
-              }
-              kaiActivitySet('local-neural-progress','done','Local inference completed');
-            }else if(result.lane==='github'){
-              kaiActivitySet('github','done','GITHUB 360M produced the answer');
-            }else if(result.router){
-              kaiActivitySet('router','done','KAI Router used '+(result.lane==='github'?'360M primary':'135M fallback'));
-              kaiActivitySet('router-fallback','done','Selected model answered successfully');
-            }else if(result.lane==='lite'){
-              kaiActivitySet('lite','done','KAI LITE response delivered');
-            }
-            finish({sources:result.sources||[],local:result.lane==='local',github:result.lane==='github',removedModel:null,router:!!result.router,lite:result.lane==='lite',fallbackLane:result.fallbackLane||null,provider:result.provider||null,model:result.model||null,routerReason:result.routerReason||null});
-            addMessage(result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
-            return true;
-          }
-          throw new Error('Selected KAI lane returned no response');
-        }catch(e){
-          if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-          console.warn('KAI unified lane failed',e);
-          if(selectedModel==='kai-router') kaiActivitySet('router','error','No available model completed the request');
-          else if(selectedModel==='kai-local') kaiActivitySet('understanding','error','LOCAL/GITHUB intelligence pipeline failed');
-          else kaiActivitySet('github','error','360M primary / 135M fallback could not complete this request');
-          const failureDetails=String(e?.message||e||'unknown model failure').slice(0,900);
-          addMessage('KAI could not produce a reliable answer. The 360M primary and 135M fallback were attempted, but neither completed this request. Details: '+failureDetails,'bot');
-          return true;
-        }
+        });
+        if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
+        if(!result?.response)throw new Error('Gemma 3 1B returned no response.');
+        kaiActivitySet('router','done','Gemma 3 1B generated the answer locally on this device.');
+        kaiActivitySet('composing','done','Response completed by Gemma.');
+        finish({sources:result.sources||[],local:true,provider:result.provider||'Google Gemma 3 1B · local WebGPU',model:result.model||'Gemma 3 1B',research:!!result.research});
+        addMessage(result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
+        return true;
+      }catch(e){
+        if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
+        console.warn('KAI Gemma 3 1B failed',e);
+        kaiActivitySet('router','error','Gemma could not complete this response on this device.');
+        const failureDetails=String(e?.message||e||'unknown Gemma failure').slice(0,900);
+        finish({sources:[],local:true,provider:'Google Gemma 3 1B · local WebGPU',error:failureDetails});
+        addMessage('KAI could not complete this response with Gemma 3 1B on this device. No cloud AI fallback was used. Details: '+failureDetails,'bot');
+        return true;
       }
       const bootstrapState=window.HAxBROKai51Bootstrap?.state?.()||{};
-      /* ONE handoff rule:
-         - while KAI 51 is not verified ready, KAI Lite may bridge the turn;
-         - once KAI 51 is verified, KAI Lite is never allowed to answer that turn again;
-         - bootstrap.generate() is allowed to await the final engine promise, eliminating
-           the tiny ready-event race that previously sent a turn back to KAI Lite. */
+      /* Legacy recovery branch is unreachable: normal turns return through Gemma 3 1B above. */
       const kai51Verified=bootstrapState.status==='ready' || bootstrapState.verified===true || !!bootstrapState.runtimeReady;
       /* Once KAI 51 is verified, it owns every subsequent normal turn, including turns launched from UI choice flows. */
       if(kai51Verified&&window.HAxBROKai51Bootstrap?.generate){
@@ -414,7 +329,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             kaiActivityStep('local','KAI 51 · local','Running directly on this device','','running');
             kaiActivitySet('thinking','done','Understanding complete');
             kaiActivitySet('language','done','Language and communication mode detected');
-            kaiActivitySet('local','done','Response generated locally');
+            kaiActivitySet('gemma','done','Gemma generated the response locally');
             kaiActivitySet('synthesis','done','Answer synthesis completed');
             kaiActivityFinish({sources:[],local:true});
             addMessage(local.response,'bot');
@@ -424,8 +339,7 @@ if(input)input.value='';resize();try{if(!overdrive){
         }catch(e){
           kaiActivityFinish({sources:[]});
           console.warn('KAI 51 browser-local runtime failed after local retry; moving through the controlled recovery chain',e);
-          /* Browser WASM failure must not immediately promote KAI Lite.
-             /api/chat is still a KAI 51 generation lane. KAI Lite is final emergency fallback. */
+          /* Legacy cloud recovery is disabled; Gemma remains the only conversational model. */
           try{
             kaiActivityStart('light');
             kaiActivityStep('managed','KAI 51 · recovery','KAI 51 is active; reconnecting local execution through the managed KAI 51 lane','','running');
@@ -457,7 +371,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             }
             throw new Error(managed.error||('KAI 51 managed lane returned HTTP '+rr.status));
           }catch(managedError){
-            console.warn('KAI 51 managed recovery failed; KAI Lite is now the final emergency fallback',managedError);
+            console.warn('Legacy managed recovery is disabled; Gemma remains the only conversational model.',managedError);
           }
           // No rule-based or web-snippet answer is substituted when neural lanes fail.
           addMessage('KAI 51 could not complete this turn. Please retry once.','bot');
@@ -465,7 +379,7 @@ if(input)input.value='';resize();try{if(!overdrive){
         }
       }
       if(!kai51Verified&&!opts.fromChoice){
-        // Initialize the real local neural model; never substitute KAI Lite canned/extractive replies.
+        // Gemma 3 1B is the only conversational model; webpage retrieval is a tool.
         try{window.HAxBROKai51Bootstrap?.prepare?.().catch(e=>console.warn('KAI 51 local initialization',e));}catch{}
       }
       setBusy(true,opts.searchMode==='quick'?'light':'heavy');
@@ -685,21 +599,20 @@ if(!overdrive&&!opts.fromChoice&&localEngine?.isReady?.()){
   const localHistory=active()?.items?.slice(-12)||[];
   /* The user message was already rendered and saved at the top of sendChat().
      Do not append it again when the local KAI runtime handles the turn. */
-  kaiActivityStart('light');kaiActivityStep('local','KAI 51 · local','Running directly in this browser','','running');
+  kaiActivityStart('light');kaiActivityStep('gemma','KAI 51 · Gemma 3 1B','Running locally on this device','','running');
   try{
-    const localResult=await localEngine.generate(value,localHistory,window.HAxBROVoiceIntelligence?.snapshot?.()||window.HAxBROVoiceContext||null);
+    const localResult=await window.HAxBROKai51Bootstrap.unifiedGenerate(value,localHistory,{signal:activeChatController?.signal,searchMode:'normal'});
     kaiActivitySet('local','done','Response generated locally');
     kaiActivityFinish({sources:[],local:true});
     addMessage(localResult.response||localResult.text||'','bot');
   }catch(e){
     kaiActivitySet('local','error','Local runtime unavailable');
     kaiActivityFinish({sources:[]});
-    addMessage('KAI 51 local runtime could not complete this turn. The local engine was not replaced by an external chat provider.','bot');
+    addMessage('Gemma 3 1B could not complete this turn on this device. No cloud AI fallback was used.','bot');
   }
   return true;
 }
-/* The KAI Lite bridge is handled once above. Do not run a second Lite request here:
-   duplicate bridge calls were causing inconsistent handoffs and unnecessary latency. */
+/* No second chat provider or retrieval-only answer lane is used. */
   let r;if(overdrive){
   const kaiCommand=value;
   if(window.HAxBROAdmin69Simulation?.run){await window.HAxBROAdmin69Simulation.run(kaiCommand);return true;}
