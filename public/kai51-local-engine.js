@@ -6,7 +6,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
   const MODEL=PROFILE==='local'?'onnx-community/SmolLM2-135M-Instruct-ONNX-MHA':'onnx-community/SmolLM2-360M-Instruct-ONNX';
   const MODEL_RELEASE=PROFILE==='local'?'local-fast-135m':'kai51-model-latest';
   const TRAINING_SYNC='/api/kai-training-sync';
-  const VERSION=PROFILE==='local'?'kai51-local-135m-q4-v15-creative-fallback':'kai51-github-360m-q4-v37-primary-answer-quality';
+  const VERSION=PROFILE==='local'?'kai51-local-135m-q4-v15-creative-fallback':'kai51-github-360m-q4-v38-conversation-parameters';
   const MODEL_ASSETS=new Set([
     'config.json',
     'generation_config.json',
@@ -61,7 +61,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     /* Use a fresh browser-cached pack first. The pack is optional prompt conditioning,
        so repeated model boots must not hit Hatchable when a valid cached copy exists. */
     let cached=null;
-    try{cached=JSON.parse(localStorage.getItem('haxbro:kai51:training-pack')||'null');}catch{}
+    try{cached=JSON.parse(localStorage.getItem('haxbro:kai51:training-pack:v2')||'null');}catch{}
     if(cached?.pack&&Number.isFinite(Number(cached.savedAt))&&Date.now()-Number(cached.savedAt)<24*60*60*1000){
       trainingPack=cached.pack;
       return trainingPack;
@@ -77,7 +77,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
         const d=await r.json();
         if(!d?.ok||!d?.canonical) throw new Error('invalid Hatchable training pack');
         trainingPack=d;
-        try{localStorage.setItem('haxbro:kai51:training-pack',JSON.stringify({savedAt:Date.now(),pack:d}));}catch{}
+        try{localStorage.setItem('haxbro:kai51:training-pack:v2',JSON.stringify({savedAt:Date.now(),pack:d}));}catch{}
         return d;
       }catch(e){
         if(cached?.pack) return trainingPack=cached.pack;
@@ -193,9 +193,11 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
   async function runOnce(messages,generationOptions={}){
     await prepare();
     return pipe(messages,{
-      max_new_tokens:PROFILE==='local'?64:96,
-      do_sample:false,
-      repetition_penalty:1.15,
+      max_new_tokens:PROFILE==='local'?64:160,
+      do_sample:PROFILE!=='local',
+      temperature:0.62,
+      top_p:0.90,
+      repetition_penalty:PROFILE==='local'?1.15:1.08,
       no_repeat_ngram_size:3,
       return_full_text:false,
       ...generationOptions
@@ -219,7 +221,8 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
     // Short clarifications and corrections also go through neural inference with the recent dialogue attached.
     // Everyday conversation is handled by neural inference, not phrase-specific canned answers.
     // All chat turns, including greetings and social reactions, now use the selected real neural model.
-    const generationOptions={};
+    const generationOptions={max_new_tokens:PROFILE==='local'?64:160,do_sample:PROFILE!=='local',temperature:0.62,top_p:0.90,repetition_penalty:PROFILE==='local'?1.15:1.08,no_repeat_ngram_size:3};
+    if(isSmallTalk&&PROFILE!=='local') generationOptions.max_new_tokens=48;
     // The App Maker's first pass is only a short analysis brief, not the application itself.
     // Classify the actual user request rather than wrapper instructions, otherwise analysis
     // turns were incorrectly granted the full 768/1536-token code-generation budget.
@@ -232,15 +235,17 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
       .filter(x=>x&&x.rule)
       .filter(x=>x.capability==='general' || x.capability===capability)
       .filter(x=>x.id!=='creator')
-      .slice(0,PROFILE==='local'?3:4)
+      .slice(0,PROFILE==='local'?4:8)
       .map(x=>'- '+x.rule)
       .join('\n');
     const examples=(trainingPack?.examples||[])
       .filter(x=>x&&(!x.capability||x.capability===capability))
-      .slice(0,hasResearchEvidence?0:PROFILE==='local'?0:2)
-      .map(x=>'EXAMPLE REQUEST: '+String(x.prompt||'')+'\nCONTRACT: '+String(x.response_contract||''))
+      .map(x=>{const hay=(String(x.prompt||'')+' '+(Array.isArray(x.tags)?x.tags.join(' '):'')).toLowerCase();const terms=userRequest.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(' ').filter(w=>w.length>2);const score=terms.reduce((n,w)=>n+(hay.includes(w)?1:0),0);return {...x,_score:score};})
+      .sort((a,b)=>b._score-a._score||Number(b.weight||0)-Number(a.weight||0))
+      .slice(0,hasResearchEvidence?0:PROFILE==='local'?1:3)
+      .map(x=>'BEHAVIOR EXAMPLE: '+String(x.prompt||'')+'\nRESPONSE CONTRACT: '+String(x.response_contract||''))
       .join('\n');
-    const conditioning=(isSmallTalk||hasResearchEvidence)?'':[rules?'Relevant HATCHABLE KAI 51 BEHAVIOR RULES:\n'+rules:'',examples?'Relevant HATCHABLE KAI 51 EXAMPLES:\n'+examples:''].filter(Boolean).join('\n\n');
+    const conditioning=hasResearchEvidence?'':[rules?'Relevant HATCHABLE KAI 51 BEHAVIOR PARAMETERS:\n'+rules:'',examples?'RELEVANT RESPONSE-BEHAVIOR EXAMPLES (contracts, not canned answers):\n'+examples:''].filter(Boolean).join('\n\n');
     // Keep recent dialogue for EVERY turn, including greetings and emotional/casual messages.
     // This lets the model understand the flow instead of treating each message as a fresh task.
     const normalizedHistory=(Array.isArray(history)?history:[])
@@ -248,11 +253,11 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{},prefer
       .map(x=>{
         const rawRole=String(x.role||x.sender||x.who||'user').toLowerCase();
         const role=rawRole==='bot'||rawRole==='ai'||rawRole==='model'||rawRole==='assistant'?'assistant':'user';
-        const content=String(x.content||x.text||x.message||'').trim().slice(0,900);
+        const content=String(x.content||x.text||x.message||'').trim().slice(0,PROFILE==='local'?900:1200);
         return {role,content};
       })
       .filter(x=>x.content && !(x.role==='user' && (x.content===prompt||x.content===userRequest)))
-      .slice(-8);
+      .slice(PROFILE==='local'?-8:-12);
     const messages=[
       {role:'system',content:'You are KAI 51, the conversational intelligence of HAxBRO AI. Talk naturally like a thoughtful, attentive conversation partner while remaining honest that you are an AI. Treat the latest user message as part of the ongoing conversation, not an isolated phrase. Use the recent dialogue to understand references, emotional tone, jokes, corrections, forgiveness, and follow-up questions. Answer what the user actually means; do not change the subject, invent context, repeat canned apologies, or fall back to generic offers to help. For casual chat, respond casually and warmly; for feelings, acknowledge them without being clinical; for factual or technical questions, answer accurately and explain uncertainty. If the message is unclear, ask one brief, natural clarification. Never claim human feelings or experiences. Follow explicit output formats and length constraints.'},
       ...(hasResearchEvidence?[{role:'system',content:'RESEARCH TASK: You are the final answering model, not a search-results display. Read the supplied evidence carefully, select facts that directly answer the question, compare relevant sources, explain why the key findings matter, and answer in your own words. Cite supported claims as [1], [2], etc., matching the numbered [SOURCE 1], [SOURCE 2] entries. Do not invent facts or claim a page was read when its label says it was only a search snippet. If evidence is weak or conflicting, say exactly what remains uncertain.'}]:[]),
