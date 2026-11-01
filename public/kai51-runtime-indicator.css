@@ -16,5 +16,5 @@
 .kai51-boot-stamp .kai51-boot-meta{display:flex!important;margin:0!important}
 .kai51-boot-stamp .kai51-boot-meta b{font-size:9px!important;color:#4b677b!important}
 .kai51-boot-stamp .kai51-boot-meta b:before{content:'🔒 KAI 51 · ';font-weight:700;color:#71818f}
-.kai51-boot-stamp:after{content:'KAI Lite active while KAI 51 finishes';display:block;margin-left:16px;margin-top:2px;font-size:7px;color:#8a97a2;white-space:nowrap}
+.kai51-boot-stamp:after{content:'On-device model preparing';display:block;margin-left:16px;margin-top:2px;font-size:7px;color:#8a97a2;white-space:nowrap}
 @media(max-width:700px){.kai51-boot-stamp{right:12px!important;top:82px!important;bottom:auto!important;max-width:calc(100vw - 24px)!important}}

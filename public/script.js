@@ -241,9 +241,9 @@ function showAppPlatformChoices(value){
     {icon:'📱',label:'Mobile App',detail:'Mobile-first application experience',onClick:async()=>{if(window.HAxBROFutureMaker?.open){await window.HAxBROFutureMaker.open(value+'\n\nSELECTED PLATFORM: Mobile App',true)}else window.dispatchEvent(new CustomEvent('haxbro:open-app-maker',{detail:{prompt:value+'\n\nSELECTED PLATFORM: Mobile App',autoBuild:true}}));}}
   ]);
 }
-async function sendChat(text,opts={}){let value=String(text||'').trim();const attachedImage=window.HAxBROPendingImage||null;if(!value&&!attachedImage)return false;if(attachedImage&&!value)value='Please analyze the attached image in detail.';if(sendInFlight&&!opts.internalRetry)return true;const savedModelChoice=localStorage.getItem(haxbroUserKey('model_choice'));if(window.HAxBROSelectedModel==='kai-lite'||savedModelChoice==='kai-lite'){window.HAxBROSelectedModel='kai-router';localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}const now=Date.now();if(value===lastSendValue&&now-lastSendAt<5000&&!opts.internalRetry)return true;const attemptId=opts.internalRetry?sendAttemptId:sendAttemptId+1;if(!opts.internalRetry){sendAttemptId=attemptId;activeChatController=new AbortController();window.HAxBROActiveChatSignal=activeChatController.signal;clearTimeout(sendWatchdogTimer);sendInFlight=true;lastSendValue=value;lastSendAt=now;const watchdogMs=360000;sendWatchdogTimer=setTimeout(()=>{if(sendInFlight&&sendAttemptId===attemptId){try{activeChatController?.abort()}catch{}try{activeRealtimeClient?.close?.()}catch{}try{activeStreamReader?.cancel?.()}catch{}sendInFlight=false;setBusy(false);addMessage('KAI did not finish within '+Math.round(watchdogMs/1000)+' seconds. The selected model run was stopped; no web-only substitute was used. You can retry or check the selected model.','bot');}},watchdogMs)}if(await checkAdmin69(value)){sendInFlight=false;return true}ensureChat();
-/* KAI uses one conversational model: Gemma 3 1B running locally on this device. */
-/* No hard-coded creator/identity response. Every normal question is handled by the Gemma conversational model. */
+async function sendChat(text,opts={}){let value=String(text||'').trim();const attachedImage=window.HAxBROPendingImage||null;if(!value&&!attachedImage)return false;if(attachedImage&&!value)value='Please analyze the attached image in detail.';if(sendInFlight&&!opts.internalRetry)return true;const savedModelChoice=localStorage.getItem(haxbroUserKey('model_choice'));if(window.HAxBROSelectedModel==='kai-lite'||savedModelChoice==='kai-lite'){window.HAxBROSelectedModel='kai-router';localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}const now=Date.now();/* A completed message may be sent again immediately; sendInFlight already blocks simultaneous duplicates. */const attemptId=opts.internalRetry?sendAttemptId:sendAttemptId+1;if(!opts.internalRetry){sendAttemptId=attemptId;activeChatController=new AbortController();window.HAxBROActiveChatSignal=activeChatController.signal;clearTimeout(sendWatchdogTimer);sendInFlight=true;lastSendValue=value;lastSendAt=now;const watchdogMs=360000;sendWatchdogTimer=setTimeout(()=>{if(sendInFlight&&sendAttemptId===attemptId){try{activeChatController?.abort()}catch{}try{activeRealtimeClient?.close?.()}catch{}try{activeStreamReader?.cancel?.()}catch{}sendInFlight=false;setBusy(false);addMessage('KAI did not finish within '+Math.round(watchdogMs/1000)+' seconds. The selected model run was stopped; no web-only substitute was used. You can retry or check the selected model.','bot');}},watchdogMs)}if(await checkAdmin69(value)){sendInFlight=false;return true}ensureChat();
+/* KAI uses one device-selected conversational model, running locally on the user's device. */
+/* No hard-coded creator/identity response. Every normal question is handled by the active local model. */
 /* Web search is a tool used by Gemma; it is never a replacement answer lane. */
 if(!opts.fromChoice&&!overdrive&&value.length>0&&!kaiChoiceSearchLike(value)&&/\b(?:what|who|when|where|why|how|which|can|does|do|is|are|explain|define|meaning|latest|recent|news|search|find|look\s*(?:up|for)|price|cost|weather|version|release|update)\b/i.test(value)){
   opts.searchMode='quick';
@@ -274,21 +274,22 @@ if(input)input.value='';resize();try{if(!overdrive){
         else kaiActivitySet(key,state,detail);
       };
       const finish=payload=>{try{kaiActivityFinish(payload||{});}catch{}};
+      const activeModelName=window.HAxBROKai51Bootstrap?.state?.()?.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M Instruct":"Google Gemma 3 1B");
       try{
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-        kaiActivitySet('thinking','running','Gemma is understanding your message and recent conversation.');
-        mark('router','KAI 51 · Gemma 3 1B','Loading or using the one local conversational model.','running');
+        kaiActivitySet('thinking','running',activeModelName+' is understanding your message and recent conversation.');
+        mark('router','KAI 51 · '+activeModelName,'Loading or using the one local conversational model.','running');
         const result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
           searchMode:opts.searchMode||'normal',
           onSources:sources=>kaiActivityResearch(sources),
           signal:activeChatController?.signal,
           onStage:(stage,detail)=>{
             const labels={
-              gemma:'Loading Gemma 3 1B locally',
-              thinking:'Gemma is understanding the request',
+              gemma:'Loading '+activeModelName+' locally',
+              thinking:activeModelName+' is understanding the request',
               searching:'Searching and reading webpages',
-              analyzing:'Gemma is evaluating retrieved evidence',
-              composing:'Gemma is writing the response'
+              analyzing:activeModelName+' is evaluating retrieved evidence',
+              composing:activeModelName+' is writing the response'
             };
             const keys={searching:'searching',analyzing:'analyzing',composing:'composing'};
             if(stage==='searching')kaiActivitySet('thinking','done');
@@ -298,19 +299,19 @@ if(input)input.value='';resize();try{if(!overdrive){
           }
         });
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-        if(!result?.response)throw new Error('Gemma 3 1B returned no response.');
-        kaiActivitySet('router','done','Gemma 3 1B generated the answer locally on this device.');
-        kaiActivitySet('composing','done','Response completed by Gemma.');
+        if(!result?.response)throw new Error(activeModelName+' returned no response.');
+        kaiActivitySet('router','done',activeModelName+' generated the answer locally on this device.');
+        kaiActivitySet('composing','done','Response completed by '+activeModelName+'.');
         finish({sources:result.sources||[],local:true,provider:result.provider||'Google Gemma 3 1B · local WebGPU',model:result.model||'Gemma 3 1B',research:!!result.research});
         addMessage(result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
         return true;
       }catch(e){
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-        console.warn('KAI Gemma 3 1B failed',e);
-        kaiActivitySet('router','error','Gemma could not complete this response on this device.');
+        console.warn('KAI local model failed',e);
+        kaiActivitySet('router','error',activeModelName+' could not complete this response on this device.');
         const failureDetails=String(e?.message||e||'unknown Gemma failure').slice(0,900);
-        finish({sources:[],local:true,provider:'Google Gemma 3 1B · local WebGPU',error:failureDetails});
-        addMessage('KAI could not complete this response with Gemma 3 1B on this device. No cloud AI fallback was used. Details: '+failureDetails,'bot');
+        finish({sources:[],local:true,provider:activeModelName+' · local WebGPU',error:failureDetails});
+        addMessage('KAI could not complete this response with '+activeModelName+' on this device. No cloud AI fallback was used. Details: '+failureDetails,'bot');
         return true;
       }
       const bootstrapState=window.HAxBROKai51Bootstrap?.state?.()||{};

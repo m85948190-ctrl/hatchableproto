@@ -1,11 +1,11 @@
-const CACHE='haxbro-shell-v46';
+const CACHE='haxbro-shell-v47';
 const ASSETS=[
   '/','/index.html','/app/','/app/index.html',
   '/style.css?v=219','/ui-fixes.css?v=218','/responsive-fixes.css?v=218',
-  '/script.js?v=394','/work-canvas.js?v=13','/install.js?v=220',
+  '/script.js?v=395','/work-canvas.js?v=13','/install.js?v=220',
   '/haxbro-cinematic-intro.css?v=3','/haxbro-onboarding.css?v=3','/haxbro-onboarding.js?v=4','/deepx.js?v=2','/onboarding-kai.png','/onboarding-appmaker.png','/onboarding-creation.png','/onboarding-ecosystem.jpg',
-  '/kai-image-worker.js?v=3','/kai51-local.js?v=71','/kai51-local-engine.js?v=81','/kai-local-intelligence.js?v=43',
-  '/kai-local-model.js?v=7','/kai-local-ui.js?v=10','/kai51-runtime-indicator.js?v=6','/kai51-boot-stamp.js?v=12',
+  '/kai-image-worker.js?v=3','/kai51-local.js?v=72','/kai51-local-engine.js?v=82','/kai51-phone-engine.js?v=1','/kai-local-intelligence.js?v=43',
+  '/kai-local-model.js?v=7','/kai-local-ui.js?v=11','/kai51-runtime-indicator.js?v=7','/kai51-boot-stamp.js?v=13',
   '/decoding-partner.js?v=3','/encryptor-machine.js?v=1','/deepx.js?v=2','/pro-mode.js?v=1',
   '/workspace-bridge.js?v=1','/kai-predictive-timer.js?v=1','/site.webmanifest?v=744',
   '/logo-symbol.svg?v=753','/terms.html','/privacy.html'

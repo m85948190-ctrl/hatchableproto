@@ -52,6 +52,8 @@
 
   function render(d={}){
     const nativeState=window.HAxBROKai51Bootstrap?.state?.();
+    const phoneModel=window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android";
+    const modelName=nativeState?.model||(phoneModel?"SmolLM2 135M Instruct":"Gemma 3 1B");
     // READY is a durable installation state, not merely an in-memory runtime state.
     if(nativeState?.installed && nativeState?.verified && nativeState?.status==='ready'){
       hide();
@@ -76,8 +78,8 @@
 
     const title=document.getElementById('kai51BootTitle');
     const body=document.getElementById('kai51BootText');
-    if(title) title.textContent='KAI 51 · REAL INTELLIGENCE MODEL IS LOADING';
-    if(body) body.textContent='Gemma 3 1B is downloaded directly to this device and runs locally. The first download is about 1 GB; later visits may reuse the browser cache.';
+    if(title) title.textContent='KAI 51 · '+modelName.toUpperCase()+' IS LOADING';
+    if(body) body.textContent=phoneModel?'SmolLM2 135M downloads directly to this phone (about 135 MB) and runs locally. Later visits may reuse the browser cache.':'Gemma 3 1B downloads directly to this computer (about 1 GB) and runs locally. Later visits may reuse the browser cache.';
     document.getElementById('kai51BootFill').style.width=pct+'%';
     document.getElementById('kai51BootPercent').textContent=pct+'%';
     document.getElementById('kai51BootStatus').textContent=String(d.status||'Preparing KAI 51');
@@ -90,7 +92,7 @@
   }else{
     render({progress:initial?.status==='installing'?5:0,status:initial?.status==='installing'
       ?'Restoring KAI 51 from this device…'
-      :'GEMMA 3 1B DOWNLOAD STARTS ON APP VISIT'});
+      :(window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android"?'SMOLLM2 135M DOWNLOAD STARTS ON APP VISIT':'GEMMA 3 1B DOWNLOAD STARTS ON APP VISIT')});
   }
 
   window.addEventListener('haxbro:kai-local-progress',e=>render(e.detail||{}));

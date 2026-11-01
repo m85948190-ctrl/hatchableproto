@@ -10,6 +10,7 @@
   }
   function render(d={}){
     const state=window.HAxBROKai51Bootstrap?.state?.()||{};
+    const modelName=String(state.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M":"Gemma 3 1B")).toUpperCase();
     const x=mount();
     if(d.profile==='largest'){
       x.classList.remove('is-ready');
@@ -20,7 +21,7 @@
     if(state.status==='ready'&&state.installed&&state.verified){
       x.classList.add('is-ready');
       const p=x.querySelector('.hook-pct');if(p)p.textContent='100%';
-      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· GEMMA 3 1B READY · LOCAL';
+      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· '+modelName+' READY · LOCAL';
       return;
     }
     x.classList.remove('is-ready');
@@ -34,13 +35,13 @@
       }else if(state.status==='error'||/failed|error/i.test(stage)){
         lite.textContent='· MODEL ERROR';
       }else if(/download/i.test(stage)){
-        lite.textContent='· GEMMA 3 1B DOWNLOADING';
+        lite.textContent='· '+modelName+' DOWNLOADING';
       }else if(state.status==='installing'){
-        lite.textContent='· GEMMA 3 1B INITIALIZING';
+        lite.textContent='· '+modelName+' INITIALIZING';
       }else if(state.status==='ready'){
         lite.textContent='· KAI 51 READY';
       }else{
-        lite.textContent='· GEMMA 3 1B · READY WHEN NEEDED';
+        lite.textContent='· '+modelName+' · READY WHEN NEEDED';
       }
     }
   }

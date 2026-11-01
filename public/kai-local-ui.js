@@ -8,14 +8,15 @@
     window.HAxBROSelectedModel = "kai-router";
     document.documentElement.dataset.haxbroModel = "kai-router";
     const label = document.getElementById("selectedModelLabel");
-    if (label) label.textContent = "KAI · GEMMA 3 1B";
+    const phone = window.HAxBRO_DEVICE === "ios" || window.HAxBRO_DEVICE === "android";
+    if (label) label.textContent = phone ? "KAI · SMOLLM2 135M" : "KAI · GEMMA 3 1B";
     const picker = document.getElementById("modelPickerBtn");
     if (picker) {
       picker.setAttribute("aria-disabled","true");
       picker.style.cursor = "default";
       picker.style.pointerEvents = "none";
       picker.setAttribute("aria-expanded","false");
-      picker.title = "KAI uses one local model: Gemma 3 1B";
+      picker.title = phone ? "KAI uses the local 135 MB phone model" : "KAI uses local Gemma 3 1B on this computer";
     }
     const menu = document.getElementById("modelPickerMenu");
     if (menu) {
@@ -25,7 +26,7 @@
     }
     document.querySelectorAll(".model-option").forEach(option => option.remove());
     const hint = document.querySelector(".chat-panel .hint");
-    if (hint) hint.textContent = "Gemma 3 1B · on-device WebGPU · first download about 1 GB · Enter to send";
+    if (hint) hint.textContent = phone ? "SmolLM2 135M · on-device WebGPU · first download about 135 MB · Enter to send" : "Gemma 3 1B · on-device WebGPU · first download about 1 GB · Enter to send";
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded",lockToGemma,{once:true});
   else lockToGemma();
