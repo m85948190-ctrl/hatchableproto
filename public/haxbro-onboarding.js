@@ -9,7 +9,8 @@ if(entry&&intro){
   intro.hidden=false;
   intro.style.visibility='';
   if(usernameGate)usernameGate.hidden=true;
-  intro.querySelector('video')?.pause?.();
+  const introVideo=intro.querySelector('video');
+  if(introVideo){introVideo.preload='auto';introVideo.play?.().catch(()=>{});}
   window.dispatchEvent(new CustomEvent('haxbro:onboarding-entry'));
 }
 const slides=[
@@ -116,7 +117,8 @@ if(intro){
   const tick=setInterval(()=>{left=Math.max(0,left-1);btn.dataset.remaining=String(left);setIntroLabel();if(left===0)clearInterval(tick)},1000);
   btn.addEventListener('click',()=>{if(btn.disabled)return;beginSequence()});
  }
- intro.querySelector('video')?.pause?.();
+ const introVideo=intro.querySelector('video');
+  if(introVideo){introVideo.preload='auto';introVideo.play?.().catch(()=>{});}
 }
 window.addEventListener('haxbro:kai51-ready',()=>{currentProgress=100;currentStatus='KAI 51 local model ready on this device';renderProgress()});
 window.addEventListener('haxbro:kai51-bootstrap',e=>{if(e?.detail?.status==='ready'&&modelReady()){currentProgress=100;currentStatus='KAI 51 neural model verified and ready';renderProgress()}});
