@@ -266,5 +266,28 @@
     status:()=>({ready:!!engine?.isReady?.(),modelCount:1,model:MODEL,running:!!enginePromise})
   };
   window.addEventListener("haxbro:username-changed",()=>{state=readState();});
-  setTimeout(()=>maybeInstall(),250);
+  function startVisitDownload() {
+    if (document.visibilityState === "hidden") return;
+    if (engine?.isReady?.() || enginePromise) return;
+    emit({progress:1,status:"Starting Gemma 3 1B download automatically because you opened HAxBRO"});
+    loadEngine({
+      onProgress:p=>emit(p),
+      onStage:(stage,detail)=>emit({status:detail || stage})
+    }).catch(error=>{
+      console.warn("KAI automatic Gemma installation failed",error);
+      emit({progress:99,status:"Gemma could not start automatically: " + String(error?.message || error)});
+    });
+  }
+  // User requested automatic model installation on every first visit, not on first chat.
+  // Start only when the page is visible; loadEngine deduplicates concurrent starts.
+  if (document.readyState === "complete") {
+    setTimeout(startVisitDownload,500);
+  } else {
+    window.addEventListener("load",()=>setTimeout(startVisitDownload,500),{once:true});
+  }
+  document.addEventListener("visibilitychange",()=>{
+    if (document.visibilityState === "visible" && !engine?.isReady?.() && !enginePromise) {
+      startVisitDownload();
+    }
+  });
 })();

@@ -63,7 +63,7 @@
       const title=document.getElementById('kai51BootTitle');
       const body=document.getElementById('kai51BootText');
       if(title) title.textContent='KAI 51 · LOCAL RETRIEVAL READY';
-      if(body) body.textContent='Web retrieval is ready. The local neural model downloads only when first needed, helping conserve Hatchable bandwidth.';
+      if(body) body.textContent='Gemma 3 1B starts downloading automatically as soon as HAxBRO opens and runs locally on this device.';
       document.getElementById('kai51BootFill').style.width='0%';
       document.getElementById('kai51BootPercent').textContent='0%';
       document.getElementById('kai51BootStatus').textContent='LOCAL retrieval ready · neural model not yet verified';
@@ -90,7 +90,7 @@
   }else{
     render({progress:initial?.status==='installing'?5:0,status:initial?.status==='installing'
       ?'Restoring KAI 51 from this device…'
-      :'GEMMA 3 1B LOADS LOCALLY WHEN YOU FIRST CHAT'});
+      :'GEMMA 3 1B DOWNLOAD STARTS ON APP VISIT'});
   }
 
   window.addEventListener('haxbro:kai-local-progress',e=>render(e.detail||{}));
