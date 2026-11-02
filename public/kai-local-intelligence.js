@@ -1,7 +1,7 @@
 (() => {
   /* KAI 51 LOCAL: fast evidence retrieval + neural conversation.
      This file routes and gathers evidence; it must not fabricate a response from phrase rules. */
-  const VERSION='kai51-local-evidence-synthesis-v17-context-routing-no-date-math';
+  const VERSION='kai51-local-evidence-synthesis-v18-qwen-knowledge-context';
   const clean=(v,n=9000)=>String(v??'').replace(/\u0000/g,'').trim().slice(0,n);
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
@@ -196,14 +196,11 @@
     const query=queryFor(prompt);
     const wantsSearch=shouldSearch(prompt,history);
     let web=null,wiki=[],files=[];
-    if(wantsSearch){
-      hooks.onStage?.('searching','KAI 51 · LOCAL is searching Google, Bing, DuckDuckGo and Wikipedia');
-      const [retrieved,knowledge]=await Promise.all([
-        searchFast(query,hooks?.signal,hooks?.searchMode||'normal'),
-        searchKnowledge(query,hooks?.signal)
-      ]);ensureActive();
-      web=retrieved.web;wiki=retrieved.wiki;files=knowledge;
-    }
+    const [retrieved,knowledge]=await Promise.all([
+      wantsSearch ? searchFast(query,hooks?.signal,hooks?.searchMode||'normal') : Promise.resolve({web:null,wiki:[]}),
+      searchKnowledge(query,hooks?.signal)
+    ]);ensureActive();
+    web=retrieved.web;wiki=retrieved.wiki;files=knowledge;
     const sources=[];
     for(const x of (web?.sources||[])){
       if(x?.text||x?.title)sources.push({title:clean(x.title,220),url:clean(x.url,700),text:clean(x.text,4200),source:x.engine||web.engine||'Google/Bing/DuckDuckGo',readStatus:x.readStatus||'retrieved'});
@@ -219,8 +216,8 @@
     const readableSources=unique.filter(s=>s.readStatus==='page-read'||s.readStatus==='wikipedia-article'||s.readStatus==='wikipedia-summary'||s.source==='HAxBRO Knowledge');
     hooks.onStage?.('composing','KAI 51 · neural model is interpreting the source material');
     const reason=readableSources.length?'Read source material is ready for neural interpretation':'No complete readable source was retrieved; KAI must disclose that research could not verify the answer';
-    const evidencePrompt=memoryContext+'You are KAI 51, using Google Gemma 3 1B as the primary conversational model to answer from retrieved evidence. Answer the exact user question in clear, natural language. First understand the question, then synthesize the strongest relevant facts from the sources. Compare sources where useful, explain important points and why they matter, distinguish verified facts from inference, and mention disagreements or missing evidence. Do not dump search results or copy source paragraphs. Cite claims inline as [1], [2], etc. using only the matching source numbers. Page-read and wikipedia-article entries contain readable page text; wikipedia-summary entries are abstracts, not full-page reads; HAxBRO Knowledge entries contain retrieved knowledge; search-snippet-fallback entries are leads, not verified page content. If readable evidence is absent or insufficient, say so briefly and do not pretend the research verified the answer. If the evidence is partial or conflicting, be transparent. Answer in your own words, politely and helpfully.\n\nUSER REQUEST:\n'+prompt+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+(evidence||'No reliable retrieved web or knowledge evidence was available.');
-    return {lane:'local',handoff:true,research:wantsSearch,reason,evidencePrompt,response:null,provider:'KAI 51 · webpage retrieval tool',model:'Gemma 3 1B local neural synthesis',local:true,localModel:true,sources:unique.slice(0,6).map(({title,url,source,readStatus})=>({title,url,source,readStatus:readStatus||'retrieved'})),searchEngines:[...(web?.engine?[web.engine]:[]),...(wiki.length?['Wikipedia']:[])],retrievalMs:0};
+    const evidencePrompt=memoryContext+'You are KAI 51, using the active HAxBRO local conversational model (Qwen2.5-Coder-7B on compatible desktops, compact SmolLM2 on phones) to answer from retrieved evidence. Answer the exact user question in clear, natural language. First understand the question, then synthesize the strongest relevant facts from the sources. Compare sources where useful, explain important points and why they matter, distinguish verified facts from inference, and mention disagreements or missing evidence. Do not dump search results or copy source paragraphs. Cite claims inline as [1], [2], etc. using only the matching source numbers. Page-read and wikipedia-article entries contain readable page text; wikipedia-summary entries are abstracts, not full-page reads; HAxBRO Knowledge entries contain retrieved knowledge; search-snippet-fallback entries are leads, not verified page content. If the user explicitly requested current or source-backed research, say when readable evidence is absent or insufficient and never pretend the research verified the answer. For ordinary conversation or general-knowledge questions, answer directly from model knowledge and the supplied conversation context even when no sources were retrieved. If the user asks for a specific HAxBRO project fact that is not in the supplied knowledge records, be transparent rather than inventing it. If the evidence is partial or conflicting, be transparent. Answer in your own words, politely and helpfully.\n\nUSER REQUEST:\n'+prompt+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+(evidence||(wantsSearch?'No reliable retrieved web or knowledge evidence was available.':'No web search was requested. Answer ordinary questions from your model knowledge, saved memory and conversation context.'));
+    return {lane:'local',handoff:true,research:wantsSearch,reason,evidencePrompt,response:null,provider:'KAI 51 · webpage retrieval tool',model:'HAxBRO selected local neural model',local:true,localModel:true,sources:unique.slice(0,6).map(({title,url,source,readStatus})=>({title,url,source,readStatus:readStatus||'retrieved'})),searchEngines:[...(web?.engine?[web.engine]:[]),...(wiki.length?['Wikipedia']:[])],retrievalMs:0};
   }
 
   window.HAxBROKaiLocalIntelligence={
@@ -228,7 +225,7 @@
     learn:(message)=>{learnStatedPreference(message);return userMemoryPrompt();},
     memoryContext:userMemoryPrompt,
     classify:(message,history=[])=>({research:shouldSearch(message,history),mode:'evidence-first-neural'}),
-    status:()=>({ready:true,local:true,foundationalModel:false,mode:'fast-source-grounded-evidence-synthesis-with-on-demand-neural-fallback',version:VERSION})
+    status:()=>({ready:true,local:true,foundationalModel:false,mode:'local-neural-synthesis-with-memory-and-knowledge-retrieval',version:VERSION})
   };
   window.dispatchEvent(new CustomEvent('haxbro:kai-local-ready',{detail:{version:VERSION}}));
 })();

@@ -9,14 +9,14 @@
     document.documentElement.dataset.haxbroModel = "kai-router";
     const label = document.getElementById("selectedModelLabel");
     const phone = window.HAxBRODeviceProfile?.isPhone === true || window.HAxBRO_DEVICE === "ios" || window.HAxBRO_DEVICE === "android";
-    if (label) label.textContent = phone ? "KAI · SMOLLM2 135M" : "KAI · GEMMA 3 1B";
+    if (label) label.textContent = phone ? "KAI · SMOLLM2 135M" : "KAI · QWEN CODER 7B";
     const picker = document.getElementById("modelPickerBtn");
     if (picker) {
       picker.setAttribute("aria-disabled","true");
       picker.style.cursor = "default";
       picker.style.pointerEvents = "none";
       picker.setAttribute("aria-expanded","false");
-      picker.title = phone ? "KAI uses the local 135M-parameter phone model (about 118 MB Q4F16)" : "KAI uses local Gemma 3 1B on this computer";
+      picker.title = phone ? "KAI uses the compact local phone model (about 118 MB Q4F16)" : "KAI uses Qwen2.5-Coder-7B locally · compatible desktop GPU required";
     }
     const menu = document.getElementById("modelPickerMenu");
     if (menu) {
@@ -26,7 +26,7 @@
     }
     document.querySelectorAll(".model-option").forEach(option => option.remove());
     const hint = document.querySelector(".chat-panel .hint");
-    if (hint) hint.textContent = phone ? "SmolLM2 135M · on-device inference · about 118 MB on WebGPU · Enter to send" : "Gemma 3 1B · on-device WebGPU · first download about 1 GB · Enter to send";
+    if (hint) hint.textContent = phone ? "SmolLM2 135M · local phone inference · Enter to send" : "Qwen2.5-Coder-7B · local WebGPU · several-GB first download · about 5.1 GB GPU memory required · Enter to send";
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded",lockToDeviceModel,{once:true});
   else lockToDeviceModel();

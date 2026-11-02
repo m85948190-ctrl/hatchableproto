@@ -8,8 +8,8 @@
     device: window.HAxBRO_DEVICE,
     isPhone: handheld,
     isDesktop: !handheld,
-    model: handheld ? "SmolLM2 135M Instruct" : "Google Gemma 3 1B Instruct",
-    downloadLabel: handheld ? "about 118 MB of Q4F16 weights" : "about 1 GB"
+    model: handheld ? "SmolLM2 135M Instruct" : "Qwen2.5-Coder-7B-Instruct",
+    downloadLabel: handheld ? "about 118 MB of Q4F16 weights" : "several GB · requires about 5.1 GB GPU memory"
   });
   document.documentElement.dataset.haxbroDevice = window.HAxBRO_DEVICE;
 })();

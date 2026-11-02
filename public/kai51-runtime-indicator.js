@@ -10,12 +10,12 @@
   }
   function render(d={}){
     const state=window.HAxBROKai51Bootstrap?.state?.()||{};
-    const modelName=String(state.model||((window.HAxBRODeviceProfile?.isPhone||window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M":"Gemma 3 1B")).toUpperCase();
+    const modelName=String(state.model||((window.HAxBRODeviceProfile?.isPhone||window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M":"Qwen2.5-Coder-7B")).toUpperCase();
     const x=mount();
     if(d.profile==='largest'){
       x.classList.remove('is-ready');
       const pct=x.querySelector('.hook-pct');if(pct)pct.textContent=clamp(d.progress)+'%';
-      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· '+String(d.status||'GEMMA 3 1B INITIALIZING').toUpperCase();
+      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· '+String(d.status||'QWEN2.5-CODER-7B INITIALIZING').toUpperCase();
       return;
     }
     if(state.status==='ready'&&state.installed&&state.verified){
@@ -31,7 +31,7 @@
     if(lite){
       const stage=String(d.status||'').toLowerCase();
       if(d.profile==='local'){
-        lite.textContent='· GEMMA LOCAL ENGINE';
+        lite.textContent='· QWEN LOCAL ENGINE';
       }else if(state.status==='error'||/failed|error/i.test(stage)){
         lite.textContent='· MODEL ERROR';
       }else if(/download/i.test(stage)){
