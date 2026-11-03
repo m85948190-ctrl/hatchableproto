@@ -303,9 +303,10 @@ if(input)input.value='';resize();try{if(!overdrive){
         });
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
         if(!result?.response)throw new Error(activeModelName+' returned no response.');
-        kaiActivitySet('router','done',activeModelName+' generated the answer locally on this device.');
-        kaiActivitySet('composing','done','Response completed by '+activeModelName+'.');
-        finish({sources:result.sources||[],local:true,provider:result.provider||activeModelName+' · local on-device inference',model:result.model||activeModelName,research:!!result.research});
+        const resolvedModelName=result.model||window.HAxBROKai51Bootstrap?.state?.()?.model||activeModelName;
+        kaiActivitySet('router','done',resolvedModelName+' generated the answer locally on this device.');
+        kaiActivitySet('composing','done','Response completed by '+resolvedModelName+'.');
+        finish({sources:result.sources||[],local:true,provider:result.provider||resolvedModelName+' · local on-device inference',model:resolvedModelName,research:!!result.research});
         addMessage(result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
         return true;
       }catch(e){

@@ -68,7 +68,8 @@ function decodeBingTarget(href){
   try{const u=new URL(value);if(u.hostname.endsWith("bing.com"))return "";return u.href;}catch{return "";}
 }
 function htmlText(value){
-  return clean(String(value||"").replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,"<").replace(/&gt;/gi,">"),1400);
+  const decoded=String(value||"").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,"<").replace(/&gt;/gi,">");
+  return clean(decoded.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," "),1400);
 }
 async function bingSearch(query){
   const url="https://www.bing.com/search?q="+encodeURIComponent(query);
