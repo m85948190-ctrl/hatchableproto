@@ -274,7 +274,7 @@ if(input)input.value='';resize();try{if(!overdrive){
         else kaiActivitySet(key,state,detail);
       };
       const finish=payload=>{try{kaiActivityFinish(payload||{});}catch{}};
-      const activeModelName=window.HAxBROKai51Bootstrap?.state?.()?.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M Instruct":"Qwen2.5-Coder-7B-Instruct");
+      const activeModelName=window.HAxBROKai51Bootstrap?.state?.()?.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M Instruct":"Qwen3-1.7B-Instruct");
       try{
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
         kaiActivitySet('thinking','running',activeModelName+' is understanding your message and recent conversation.');
@@ -603,7 +603,7 @@ if(!overdrive&&!opts.fromChoice&&localEngine?.isReady?.()){
   const localHistory=active()?.items?.slice(-12)||[];
   /* The user message was already rendered and saved at the top of sendChat().
      Do not append it again when the local KAI runtime handles the turn. */
-  kaiActivityStart('light');kaiActivityStep('model','KAI 51 · Qwen2.5-Coder-7B','Running locally on this device','','running');
+  kaiActivityStart('light');kaiActivityStep('model','KAI 51 · Qwen3-1.7B','Running locally on this device','','running');
   try{
     const localResult=await window.HAxBROKai51Bootstrap.unifiedGenerate(value,localHistory,{signal:activeChatController?.signal,searchMode:'normal'});
     kaiActivitySet('local','done','Response generated locally');

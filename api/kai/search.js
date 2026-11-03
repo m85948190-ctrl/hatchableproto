@@ -89,6 +89,27 @@ async function bingSearch(query){
     out.push({title,url:target,text});
     if(out.length>=8)break;
   }
+  // Bing sometimes serves a changed/JS-heavy HTML shell. Its RSS endpoint
+  // provides the same public search results without relying on HTML classes.
+  if(!out.length){
+    const rssUrl="https://www.bing.com/search?format=rss&q="+encodeURIComponent(query);
+    const rssResponse=await fetch(rssUrl,{headers:{accept:"application/rss+xml, application/xml, text/xml","user-agent":"Mozilla/5.0 (compatible; HAxBROResearch/1.0)"}});
+    if(rssResponse.ok){
+      const xml=await rssResponse.text();
+      const items=xml.match(/<item>[\s\S]*?<\/item>/gi)||[];
+      for(const item of items){
+        const titleMatch=item.match(/<title>([\s\S]*?)<\/title>/i);
+        const linkMatch=item.match(/<link>([\s\S]*?)<\/link>/i);
+        const descMatch=item.match(/<description>([\s\S]*?)<\/description>/i);
+        const title=htmlText(titleMatch?.[1]||"");
+        const target=decodeBingTarget(htmlText(linkMatch?.[1]||""));
+        if(!title||!target||seen.has(target))continue;
+        seen.add(target);
+        out.push({title,url:target,text:htmlText(descMatch?.[1]||"")});
+        if(out.length>=8)break;
+      }
+    }
+  }
   return out;
 }
 
@@ -97,7 +118,7 @@ async function multiSearch(query,mode="fast"){
   const primary=variants.slice(0,mode==="deep"?3:1);
   // Run three independent public search engines in parallel. A failure in one
   // engine must not suppress results from the others.
-  const deadline=mode==="deep"?12000:6000;
+  const deadline=mode==="deep"?18000:10000;
   const settled=await Promise.race([
     Promise.all([
       Promise.all(primary.map(async q=>{try{return await googleSearch(q)}catch{return []}})),
