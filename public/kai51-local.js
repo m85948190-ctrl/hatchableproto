@@ -1,11 +1,11 @@
 (() => {
   const IS_PHONE = window.HAxBRODeviceProfile?.isPhone === true || window.HAxBRO_DEVICE === "ios" || window.HAxBRO_DEVICE === "android";
-  const VERSION = IS_PHONE ? "kai51-phone-smollm2-v1" : "kai51-desktop-qwen3-1.7b-adaptive-v3";
+  const VERSION = IS_PHONE ? "kai51-phone-smollm2-v1" : "kai51-desktop-qwen3-1.7b-adaptive-v4";
   const MODEL = IS_PHONE ? "SmolLM2 135M Instruct" : "Qwen3-1.7B-Instruct";
-  const ENGINE_VERSION = IS_PHONE ? "kai51-smollm2-135m-webgpu-v2" : "kai51-qwen3-1.7b-adaptive-v3";
+  const ENGINE_VERSION = IS_PHONE ? "kai51-smollm2-135m-webgpu-v2" : "kai51-qwen3-1.7b-adaptive-v4";
   const KEY = () => {
     const user = String(localStorage.getItem("haxbro_username") || "anonymous-device").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"_").slice(0,64);
-    return "haxbro:kai51:" + (user || "anonymous-device") + (IS_PHONE ? ":phone-installation:v1" : ":qwen3-1.7b-installation:v3");
+    return "haxbro:kai51:" + (user || "anonymous-device") + (IS_PHONE ? ":phone-installation:v1" : ":qwen3-1.7b-installation:v4");
   };
   let state = readState();
   let enginePromise = null;
@@ -108,7 +108,7 @@
     hooks.onStage?.("model",IS_PHONE ? "Loading SmolLM2 135M locally on this phone" : "Loading Qwen3-1.7B locally on this computer");
     emit({progress:1,status:IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-1.7B · adaptive WebGPU/WASM"});
     enginePromise = (async () => {
-      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=2" : "/kai51-local-engine.js?v=88";
+      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=2" : "/kai51-local-engine.js?v=89";
       const mod = await import(moduleUrl);
       const create = IS_PHONE ? mod.createKai51PhoneEngine : mod.createKai51Engine;
       if (typeof create !== "function") throw new Error(IS_PHONE ? "Phone model engine is missing createKai51PhoneEngine." : "Qwen engine module is missing createKai51Engine.");
