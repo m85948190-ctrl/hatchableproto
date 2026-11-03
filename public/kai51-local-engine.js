@@ -20,6 +20,10 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
   function ensureActive(signal) {
     if (signal?.aborted) throw new DOMException("Response stopped by user","AbortError");
   }
+  function withTimeout(promise,ms,label){
+    let timer;
+    return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label+" timed out after "+Math.round(ms/1000)+" seconds.")),ms);})]).finally(()=>clearTimeout(timer));
+  }
   async function loadCompatibilityModel(reason) {
     report(3,reason+" Loading SmolLM2-360M ONNX Q4 locally (about 388 MB, CPU/WASM).");
     transformers ||= await import("https://esm.sh/@huggingface/transformers@3.7.2");
@@ -33,7 +37,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
         transformers.env.backends.onnx.wasm.numThreads=Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2));
       }
     }
-    fallbackGenerator=await transformers.pipeline("text-generation",FALLBACK_MODEL_ID,{
+    fallbackGenerator=await withTimeout(transformers.pipeline("text-generation",FALLBACK_MODEL_ID,{
       device:"wasm",dtype:"q4",
       progress_callback:p=>{
         const loaded=Number(p?.loaded)||0,total=Number(p?.total)||0;
@@ -41,12 +45,12 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
         const file=String(p?.file||"").split("/").pop();
         report(pct,p?.status==="progress"&&file?("Downloading "+file):p?.status||"Downloading SmolLM2-360M model files");
       }
-    });
+    }),180000,"SmolLM2-360M download and initialization");
     report(92,"Running SmolLM2-360M local inference self-test");
-    const check=await fallbackGenerator([
+    const check=await withTimeout(fallbackGenerator([
       {role:"system",content:"You are a helpful assistant. Answer briefly and accurately."},
       {role:"user",content:"What is 2 plus 2? Reply with the number only."}
-    ],{max_new_tokens:12,temperature:0,do_sample:false,return_full_text:false});
+    ],{max_new_tokens:12,temperature:0,do_sample:false,return_full_text:false}),90000,"SmolLM2-360M inference self-test");
     const item=check?.[0]?.generated_text;
     const checkText=typeof item==="string"?item.trim():String(item?.at?.(-1)?.content||"").trim();
     if(!checkText)throw new Error("SmolLM2-360M downloaded, but its local self-test returned an empty answer.");
@@ -80,7 +84,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       if(typeof transformers.pipeline!=="function")throw new Error("Transformers.js did not expose its text-generation pipeline.");
       if(transformers.env){transformers.env.useBrowserCache=true;transformers.env.useWasmCache=true;transformers.env.allowRemoteModels=true;transformers.env.allowLocalModels=false;}
       report(5,"Downloading Qwen3-1.7B Q4F16 weights (about 1.43 GB) to this device");
-      generator=await transformers.pipeline("text-generation",MODEL_ID,{
+      generator=await withTimeout(transformers.pipeline("text-generation",MODEL_ID,{
         device:"webgpu",dtype:"q4f16",
         progress_callback:p=>{
           const loaded=Number(p?.loaded)||0,total=Number(p?.total)||0;
@@ -88,12 +92,12 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
           const file=String(p?.file||"").split("/").pop();
           report(pct,p?.status==="progress"&&file?("Downloading "+file):p?.status||"Downloading Qwen3 model files");
         }
-      });
+      }),300000,"Qwen3-1.7B download and initialization");
       report(92,"Running Qwen3 local inference self-test");
-      const check=await generator([
+      const check=await withTimeout(generator([
         {role:"system",content:"You are KAI 51. Answer briefly and naturally."},
         {role:"user",content:"Reply with exactly: KAI READY"}
-      ],{max_new_tokens:12,temperature:0,do_sample:false,return_full_text:false});
+      ],{max_new_tokens:12,temperature:0,do_sample:false,return_full_text:false}),90000,"Qwen3-1.7B inference self-test");
       const item=check?.[0]?.generated_text;
       const checkText=typeof item==="string"?item.trim():String(item?.at?.(-1)?.content||"").trim();
       if(!checkText)throw new Error("Qwen3 downloaded, but its local self-test returned an empty answer.");
