@@ -63,6 +63,9 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     return {ok:true,model:FALLBACK_MODEL,modelId:FALLBACK_MODEL_ID,device:"wasm",realModel:true,localModel:true,compatibilityFallback:true,selfTest:checkText};
   }
   async function prepare() {
+    // Ask the browser to retain the Transformers.js Cache API entries across
+    // sessions where persistent storage is supported.
+    try { await globalThis.navigator?.storage?.persist?.(); } catch {}
     if(generator||fallbackGenerator)return {ok:true,model:activeModel,modelId:generator?MODEL_ID:FALLBACK_MODEL_ID,device:activeDevice,realModel:true,localModel:true};
     if(loading)return loading;
     loading=(async()=>{

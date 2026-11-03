@@ -3,10 +3,9 @@
   const VERSION = IS_PHONE ? "kai51-phone-smollm2-v1" : "kai51-desktop-qwen3-1.7b-adaptive-v5";
   const MODEL = IS_PHONE ? "SmolLM2 135M Instruct" : "Qwen3-1.7B-Instruct";
   const ENGINE_VERSION = IS_PHONE ? "kai51-smollm2-135m-webgpu-v2" : "kai51-qwen3-1.7b-adaptive-v5";
-  const KEY = () => {
-    const user = String(localStorage.getItem("haxbro_username") || "anonymous-device").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"_").slice(0,64);
-    return "haxbro:kai51:" + (user || "anonymous-device") + (IS_PHONE ? ":phone-installation:v1" : ":qwen3-1.7b-installation:v5");
-  };
+  // Model weights and installation state belong to this browser/device, not
+  // to an individual local username. All HAxBRO profiles reuse one model cache.
+  const KEY = () => "haxbro:kai51:device" + (IS_PHONE ? ":phone-installation:v1" : ":qwen3-1.7b-installation:v5");
   let state = readState();
   let enginePromise = null;
   let engine = null;
@@ -362,8 +361,23 @@
     status:()=>({ready:!!engine?.isReady?.(),modelCount:1,model:MODEL,running:!!enginePromise})
   };
   window.addEventListener("haxbro:username-changed",()=>{state=readState();});
-  // Do not download gigabytes in the background on page load. Web search
-  // remains immediately available; the local model initializes only when a
-  // normal chat actually needs neural inference.
-  window.HAxBROKai51AutoInstall = false;
+  // Install/initialize the local model automatically whenever the app opens.
+  // Transformers.js reuses its persistent browser cache, so reloads initialize
+  // the runtime from cached weights instead of intentionally fetching them anew.
+  window.HAxBROKai51AutoInstall = true;
+  const startInstallOnOpen = () => {
+    if (document.visibilityState === "hidden") return;
+    loadEngine().catch(error => console.warn("KAI local model initialization failed",error));
+  };
+  if (document.readyState === "complete") {
+    if ("requestIdleCallback" in window) window.requestIdleCallback(startInstallOnOpen,{timeout:1200});
+    else setTimeout(startInstallOnOpen,250);
+  } else {
+    window.addEventListener("load",startInstallOnOpen,{once:true});
+  }
+  document.addEventListener("visibilitychange",() => {
+    if (document.visibilityState === "visible" && !engine?.isReady?.() && !enginePromise) {
+      startInstallOnOpen();
+    }
+  });
 })();
