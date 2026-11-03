@@ -103,9 +103,21 @@
   async function loadEngine(hooks={}) {
     if (engine?.isReady?.()) return engine;
     if (enginePromise) return enginePromise;
-    writeState({status:"installing",installed:false,verified:false,error:null});
-    hooks.onStage?.("model",IS_PHONE ? "Loading SmolLM2 135M locally on this phone" : "Loading Qwen3-0.6B locally on this computer");
-    emit({progress:1,status:IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-0.6B · WebGPU/WASM fallback"});
+    // A ready marker means this device has already completed the model install.
+    // On a page reload the in-memory WebGPU session must be recreated, but the
+    // saved install state must remain ready so we reuse the browser's model cache
+    // instead of presenting every reload as a fresh installation.
+    const previouslyInstalled = readState().status === "ready";
+    if (!previouslyInstalled) {
+      writeState({status:"installing",installed:false,verified:false,error:null});
+    } else {
+      state = readState();
+      window.HAxBROKai51BootstrapState = state;
+    }
+    hooks.onStage?.("model",IS_PHONE ? "Restoring SmolLM2 135M locally on this phone" : "Restoring Qwen3-0.6B locally on this computer");
+    emit({progress:1,status:previouslyInstalled
+      ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
+      : (IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-0.6B · WebGPU/WASM fallback")});
     enginePromise = (async () => {
       const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=2" : "/kai51-local-engine.js?v=91";
       const mod = await import(moduleUrl);
