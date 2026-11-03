@@ -211,18 +211,7 @@
     const text = String(message || "").trim();
     if (!text) throw new Error("KAI received an empty message.");
     ensureActive(hooks.signal);
-    // Small talk must never trigger a 1.43 GB model download or web retrieval.
-    // This is explicitly labelled as an instant conversational acknowledgement,
-    // not represented as a neural-model answer.
-    if (/^(?:hi|hello|hey|yo|hiya|sup|what\s*up|what's\s*up|how\s*are\s*you|are\s*you\s*there|thanks|thank\s*you|thx|ok|okay|sure|yes|yeah|yep|no|nah|got\s*it)(?:\s+bro)?[!.?, ]*$/i.test(text)) {
-      const reply = /^(?:how\s*are\s*you|are\s*you\s*there)/i.test(text)
-        ? "I'm here and ready, bro. What are we working on?"
-        : /^(?:thanks|thank\s*you|thx)/i.test(text)
-          ? "Anytime, bro."
-          : "Hey bro! I'm here. What are we working on?";
-      hooks.onStage?.("composing","Instant conversational reply · no model download or web search needed");
-      return {response:reply,lane:"instant-chat",model:"KAI instant reply",provider:"HAxBRO instant conversation · no model inference",local:true,localModel:false,research:false,sources:[],searchEngines:[],combined:true,instantReply:true};
-    }
+    // All normal chat, including greetings, proceeds through local neural inference.
     try { window.HAxBROKaiLocalIntelligence?.learn?.(text); } catch {}
     const local = window.HAxBROKaiLocalIntelligence;
     const arithmetic = isArithmetic(text) && !explicitSearch(text);
