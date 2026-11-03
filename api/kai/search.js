@@ -113,21 +113,42 @@ async function bingSearch(query){
   return out;
 }
 
+async function googleNewsSearch(query){
+  if(!/\b(news|latest|today|breaking|recent|release|released|announcement|announced|this week)\b/i.test(query))return [];
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),6500);
+  try{
+    const url="https://news.google.com/rss/search?q="+encodeURIComponent(query)+"&hl=en-IN&gl=IN&ceid=IN:en";
+    const response=await fetch(url,{signal:controller.signal,headers:{accept:"application/rss+xml, application/xml, text/xml"}});
+    if(!response.ok)return [];
+    const xml=await response.text();
+    const items=xml.match(/<item>[\s\S]*?<\/item>/gi)||[];
+    return items.slice(0,12).map(item=>{
+      const title=htmlText((item.match(/<title>([\s\S]*?)<\/title>/i)||[])[1]||"");
+      const url=htmlText((item.match(/<link>([\s\S]*?)<\/link>/i)||[])[1]||"");
+      const description=htmlText((item.match(/<description>([\s\S]*?)<\/description>/i)||[])[1]||"");
+      const publishedAt=htmlText((item.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)||[])[1]||"");
+      return title&&/^https?:\/\//i.test(url)?{title,url,text:description,publishedAt}:null;
+    }).filter(Boolean);
+  }catch{return []}finally{clearTimeout(timer)}
+}
+
 async function multiSearch(query,mode="fast"){
   const variants=queryVariants(query);
   const primary=variants.slice(0,mode==="deep"?3:1);
-  // Run three independent public search engines in parallel. A failure in one
-  // engine must not suppress results from the others.
-  const deadline=mode==="deep"?18000:10000;
+  // Run independent web providers and a separate Google News RSS lane. Search
+  // remains useful even when Google/Bing HTML pages block automated requests.
+  const deadline=mode==="deep"?18000:12000;
   const settled=await Promise.race([
     Promise.all([
       Promise.all(primary.map(async q=>{try{return await googleSearch(q)}catch{return []}})),
       Promise.all(primary.map(async q=>{try{return await bingSearch(q)}catch{return []}})),
-      Promise.all(primary.map(async q=>{try{return await ddgSearch(q)}catch{return []}}))
+      Promise.all(primary.map(async q=>{try{return await ddgSearch(q)}catch{return []}})),
+      Promise.all(primary.map(async q=>{try{return await googleNewsSearch(q)}catch{return []}}))
     ]),
-    new Promise(resolve=>setTimeout(()=>resolve([[],[],[]]),deadline))
+    new Promise(resolve=>setTimeout(()=>resolve([[],[],[],[]]),deadline))
   ]);
-  const [googleResults,bingResults,ddgResults]=settled||[[],[],[]];
+  const [googleResults,bingResults,ddgResults,newsResults]=settled||[[],[],[],[]];
   const collect=(lists,engine,limit)=>{const out=[],seen=new Set();for(const list of lists||[])for(const x of list||[]){if(!x?.url||seen.has(x.url))continue;seen.add(x.url);out.push({...x,engine});if(out.length>=limit)return out;}return out;};
   const terms=clean(query,500).toLowerCase().match(/[a-z0-9]{4,}/g)||[];
   const stop=new Set(["what","when","where","which","that","this","with","from","does","have","your","about","into","they","them","their","there","then","than","were","will","would","could","should","also","just","some","more","most","much","many","make","made","work","works","using","used","based","explain","please","tell","show"]);
@@ -136,20 +157,20 @@ async function multiSearch(query,mode="fast"){
     if(!keyTerms.length)return true;
     const text=(x.title+" "+x.text).toLowerCase();
     const matches=keyTerms.filter(term=>text.includes(term)).length;
-    // One generic word (e.g. "causes" or "lithium") must not make an unrelated
-    // result look relevant. Require two topic terms whenever the query has two+.
-    const required=keyTerms.length>=10?3:keyTerms.length>=3?2:1;
+    // For long, specific queries allow one strong topic match; the provider's
+    // ranking already narrows candidates and a hard 3-term gate hid good pages.
+    const required=keyTerms.length>=10?2:keyTerms.length>=5?1:keyTerms.length>=3?2:1;
     return matches>=required;
   });
   const google=filterRelevant(collect(googleResults,"Google Web",6));
   const bing=filterRelevant(collect(bingResults,"Bing Web",6));
   const duckduckgo=filterRelevant(collect(ddgResults,"DuckDuckGo Instant Answers",6));
+  const news=filterRelevant(collect(newsResults,"Google News",8));
   const merged=[],seen=new Set();
-  // Interleave providers so one engine cannot monopolize the evidence set.
-  for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length);i++){
-    for(const x of [google[i],bing[i],duckduckgo[i]])if(x&&!seen.has(x.url)){seen.add(x.url);merged.push(x);}
+  for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length,news.length);i++){
+    for(const x of [google[i],bing[i],duckduckgo[i],news[i]])if(x&&!seen.has(x.url)){seen.add(x.url);merged.push(x);}
   }
-  return {links:merged.slice(0,mode==="deep"?15:12),engine:[google.length?"Google Web":"",bing.length?"Bing Web":"",duckduckgo.length?"DuckDuckGo Instant Answers":""].filter(Boolean).join(" + ")||"No web search engine returned results",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length}};
+  return {links:merged.slice(0,mode==="deep"?15:12),engine:[google.length?"Google Web":"",bing.length?"Bing Web":"",duckduckgo.length?"DuckDuckGo Instant Answers":"",news.length?"Google News":""].filter(Boolean).join(" + ")||"No web search engine returned results",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length,news:news.length}};
 }
 
 async function ddgSearch(query){
