@@ -3,7 +3,10 @@ required = true
 providers = ["openai", "google"]
 description = "KAI 51 remains the HAxBRO identity and orchestration layer; managed language inference supplies natural-language generation without exposing a provider identity to users."
 
-# Authentication is intentionally disabled; HAxBRO uses browser-local username identity.
+[auth]
+enabled = true
+providers = ["email", "google"]
+# Email OTP works on the Hatchable host. Google OAuth requires the owner to finish custom-domain and Google client setup in Hatchable Settings.
 
 [[secret]]
 name = "GROQ_API_KEY_1"

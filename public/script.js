@@ -627,12 +627,10 @@ function cancelAdmin69Password(){const gate=$('#adminPasswordGate');if(gate){gat
 function renderHistorySafe(){try{renderHistory()}catch(e){}}
 function bind(id,event,fn){const el=$(id);if(el)el.addEventListener(event,fn)}
 function wire(){
-  const savedName=localStorage.getItem('haxbro_username')||'';
+  const savedName=localStorage.getItem('haxbro_username')||'HAxBRO member';
   const gate=$('#usernameGate');
-  const openUsernameLogin=()=>{if(!gate)return;gate.hidden=false;gate.setAttribute('aria-hidden','false');const field=$('#usernameInput');if(field){field.value=localStorage.getItem('haxbro_username')||'';setTimeout(()=>field.focus(),40)}};
-  if(savedName){if(gate)gate.hidden=true;updateCustomerProfile(savedName)}else openUsernameLogin();
-  bind('#usernameLoginBtn','click',openUsernameLogin);
-  bind('#usernameForm','submit',e=>{e.preventDefault();const n=String($('#usernameInput')?.value||'').trim().replace(/[^a-zA-Z0-9._-]/g,'').slice(0,32);if(!n)return;const previous=(localStorage.getItem('haxbro_username')||'').trim();if(previous!==n){localStorage.setItem('haxbro_username',n);mode=localStorage.getItem(haxbroUserKey('mode'))||'normal';study=localStorage.getItem(haxbroUserKey('study'))==='true';chats=JSON.parse(localStorage.getItem(haxbroUserKey('chats'))||'[]');adminChats=JSON.parse(localStorage.getItem(haxbroUserKey('admin_chats'))||'[]');current=chats[0]?.id||null;adminCurrent=adminChats[0]?.id||null;}else localStorage.setItem('haxbro_username',n);window.dispatchEvent(new CustomEvent('haxbro:username-changed',{detail:{username:n}}));if(gate){gate.hidden=true;gate.setAttribute('aria-hidden','true')}updateCustomerProfile(n);setMode(mode);if(!current||!active())ensureChat();else{renderHistory();renderMessages()}});
+  if(gate){gate.hidden=true;gate.setAttribute('aria-hidden','true')}
+  updateCustomerProfile(savedName);
   window.addEventListener('haxbro:workspace-result',e=>{
     const d=e.detail||{}; if(!d.report)return;
     sessionStorage.setItem('haxbro_workspace_context',String(d.report).slice(0,6000));
