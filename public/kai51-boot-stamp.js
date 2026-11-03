@@ -35,7 +35,7 @@
     el.setAttribute('aria-live','polite');
     el.innerHTML=`
       <div class="kai51-boot-kicker"><span class="kai51-boot-dot"></span><span>HAxBRO AI</span></div>
-      <div id="kai51BootTitle" class="kai51-boot-title">KAI 51 · QWEN2.5-CODER-7B IS LOADING</div>
+      <div id="kai51BootTitle" class="kai51-boot-title">KAI 51 · QWEN3-0.6B IS LOADING</div>
       <div id="kai51BootText" class="kai51-boot-text"></div>
       <div class="kai51-boot-bar"><i id="kai51BootFill"></i></div>
       <div class="kai51-boot-meta"><b id="kai51BootPercent">0%</b><span id="kai51BootStatus">Preparing KAI 51</span></div>`;
@@ -53,7 +53,7 @@
   function render(d={}){
     const nativeState=window.HAxBROKai51Bootstrap?.state?.();
     const phoneModel=window.HAxBRODeviceProfile?.isPhone===true||window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android";
-    const modelName=nativeState?.model||(phoneModel?"SmolLM2 135M Instruct":"Qwen2.5-Coder-7B-Instruct");
+    const modelName=nativeState?.model||(phoneModel?"SmolLM2 135M Instruct":"Qwen3-0.6B-Instruct");
     // READY is a durable installation state, not merely an in-memory runtime state.
     if(nativeState?.installed && nativeState?.verified && nativeState?.status==='ready'){
       hide();
@@ -79,7 +79,7 @@
     const title=document.getElementById('kai51BootTitle');
     const body=document.getElementById('kai51BootText');
     if(title) title.textContent='KAI 51 · '+modelName.toUpperCase()+' IS LOADING';
-    if(body) body.textContent=phoneModel?'SmolLM2 135M downloads directly to this phone (about 118 MB with WebGPU; about 137 MB in CPU fallback) and runs locally. Later visits may reuse the browser cache.':'Qwen2.5-Coder-7B downloads several GB of quantized weights and runs locally. It needs a compatible desktop GPU with roughly 5.1 GB of available GPU memory. Later visits may reuse the browser cache.';
+    if(body) body.textContent=phoneModel?'SmolLM2 135M downloads directly to this phone (about 118 MB with WebGPU; about 137 MB in CPU fallback) and runs locally. Later visits may reuse the browser cache.':'Qwen3-0.6B downloads compact quantized ONNX weights and runs locally through WebGPU where supported, with the existing SmolLM2-360M CPU/WASM compatibility fallback. Later visits may reuse the browser cache.';
     document.getElementById('kai51BootFill').style.width=pct+'%';
     document.getElementById('kai51BootPercent').textContent=pct+'%';
     document.getElementById('kai51BootStatus').textContent=String(d.status||'Preparing KAI 51');
@@ -92,7 +92,7 @@
   }else{
     render({progress:initial?.status==='installing'?5:0,status:initial?.status==='installing'
       ?'Restoring KAI 51 from this device…'
-      :(window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android"?'SMOLLM2 135M DOWNLOAD STARTS ON APP VISIT':'QWEN2.5-CODER-7B DOWNLOAD STARTS ON APP VISIT')});
+      :(window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android"?'SMOLLM2 135M DOWNLOAD STARTS ON APP VISIT':'QWEN3-0.6B DOWNLOAD STARTS ON APP VISIT')});
   }
 
   window.addEventListener('haxbro:kai-local-progress',e=>render(e.detail||{}));

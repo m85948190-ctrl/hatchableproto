@@ -139,15 +139,19 @@ async function multiSearch(query,mode="fast"){
   const primary=variants.slice(0,mode==="deep"?3:1);
   // Run independent web providers and a separate Google News RSS lane. Search
   // remains useful even when Google/Bing HTML pages block automated requests.
-  const deadline=mode==="deep"?18000:12000;
-  const settled=await Promise.race([
-    Promise.all([
-      Promise.all(primary.map(async q=>{try{return await googleSearch(q)}catch{return []}})),
-      Promise.all(primary.map(async q=>{try{return await bingSearch(q)}catch{return []}})),
-      Promise.all(primary.map(async q=>{try{return await ddgSearch(q)}catch{return []}})),
-      Promise.all(primary.map(async q=>{try{return await googleNewsSearch(q)}catch{return []}}))
-    ]),
-    new Promise(resolve=>setTimeout(()=>resolve([[],[],[],[]]),deadline))
+  // Give each provider its own deadline so one slow engine cannot erase
+  // results already returned by the others. Page extraction runs afterward
+  // in parallel, keeping the normal research path near a 19-second ceiling.
+  const providerTimeout=mode==="deep"?9500:7500;
+  const guarded=async task=>{
+    try{return await Promise.race([task(),new Promise(resolve=>setTimeout(()=>resolve([]),providerTimeout))]);}
+    catch{return [];}
+  };
+  const settled=await Promise.all([
+    Promise.all(primary.map(q=>guarded(()=>googleSearch(q)))),
+    Promise.all(primary.map(q=>guarded(()=>bingSearch(q)))),
+    Promise.all(primary.map(q=>guarded(()=>ddgSearch(q)))),
+    Promise.all(primary.map(q=>guarded(()=>googleNewsSearch(q))))
   ]);
   const [googleResults,bingResults,ddgResults,newsResults]=settled||[[],[],[],[]];
   const collect=(lists,engine,limit)=>{const out=[],seen=new Set();for(const list of lists||[])for(const x of list||[]){if(!x?.url||seen.has(x.url))continue;seen.add(x.url);out.push({...x,engine});if(out.length>=limit)return out;}return out;};
@@ -262,7 +266,7 @@ export default async function(req,res){
       wikipediaEvidence(query)
     ]);
     const links=searched.links||[];
-    const take=mode==="deep"?8:5;
+    const take=mode==="deep"?8:6;
     // Open actual result pages, not just search snippets. Keep the snippet only
     // as a clearly marked fallback when a publisher page is unavailable.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{

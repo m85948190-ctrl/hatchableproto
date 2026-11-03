@@ -1,6 +1,6 @@
-const VERSION = "kai51-qwen3-1.7b-adaptive-v4";
-const MODEL = "Qwen3-1.7B-Instruct";
-const MODEL_ID = "onnx-community/Qwen3-1.7B-ONNX";
+const VERSION = "kai51-qwen3-0.6b-webgpu-v1";
+const MODEL = "Qwen3-0.6B-Instruct";
+const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 const FALLBACK_MODEL = "SmolLM2-360M-Instruct";
 const FALLBACK_MODEL_ID = "HuggingFaceTB/SmolLM2-360M-Instruct";
 const MIN_BUFFER = 268435456;
@@ -86,7 +86,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       transformers ||= await import("https://esm.sh/@huggingface/transformers@3.7.2");
       if(typeof transformers.pipeline!=="function")throw new Error("Transformers.js did not expose its text-generation pipeline.");
       if(transformers.env){transformers.env.useBrowserCache=true;transformers.env.useWasmCache=true;transformers.env.allowRemoteModels=true;transformers.env.allowLocalModels=false;}
-      report(5,"Downloading Qwen3-1.7B Q4F16 weights (about 1.43 GB) to this device");
+      report(5,"Downloading Qwen3-0.6B Q4F16 ONNX weights to this device");
       generator=await withTimeout(transformers.pipeline("text-generation",MODEL_ID,{
         device:"webgpu",dtype:"q4f16",
         progress_callback:p=>{
@@ -95,24 +95,24 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
           const file=String(p?.file||"").split("/").pop();
           report(pct,p?.status==="progress"&&file?("Downloading "+file):p?.status||"Downloading Qwen3 model files");
         }
-      }),300000,"Qwen3-1.7B download and initialization");
+      }),180000,"Qwen3-0.6B download and initialization");
       report(92,"Running Qwen3 local inference self-test");
       const check=await withTimeout(generator([
         {role:"system",content:"You are KAI 51. Answer briefly and naturally."},
         {role:"user",content:"Reply with exactly: KAI READY"}
-      ],{max_new_tokens:12,temperature:0,do_sample:false,return_full_text:false}),90000,"Qwen3-1.7B inference self-test");
+      ],{max_new_tokens:12,temperature:0,do_sample:false,return_full_text:false}),60000,"Qwen3-0.6B inference self-test");
       const item=check?.[0]?.generated_text;
       const checkText=typeof item==="string"?item.trim():String(item?.at?.(-1)?.content||"").trim();
       if(!checkText)throw new Error("Qwen3 downloaded, but its local self-test returned an empty answer.");
       activeModel=MODEL;
-      report(100,"Qwen3-1.7B is ready locally on this device");
+      report(100,"Qwen3-0.6B is ready locally on this device");
       lastError=null;
-      try{onReady({model:MODEL,modelId:MODEL_ID,device:activeDevice,verified:true,realModel:true,localModel:true,lane:"qwen3",quantization:"Q4F16",approximateDownload:"1.43 GB",selfTest:checkText});}catch{}
+      try{onReady({model:MODEL,modelId:MODEL_ID,device:activeDevice,verified:true,realModel:true,localModel:true,lane:"qwen3",quantization:"Q4F16",downloadProfile:"compact ONNX weights",selfTest:checkText});}catch{}
       return {ok:true,model:MODEL,modelId:MODEL_ID,device:activeDevice,realModel:true,localModel:true,selfTest:checkText};
     })().catch(async error=>{
       const primaryError=String(error?.message||error);
       generator=null;
-      try{return await loadCompatibilityModel("Qwen3-1.7B could not initialize ("+primaryError.slice(0,180)+").");}
+      try{return await loadCompatibilityModel("Qwen3-0.6B could not initialize ("+primaryError.slice(0,180)+").");}
       catch(fallbackError){
         lastError=primaryError+"; SmolLM2-360M compatibility model also failed: "+String(fallbackError?.message||fallbackError);
         report(99,"Local AI initialization failed: "+lastError.slice(0,180));
