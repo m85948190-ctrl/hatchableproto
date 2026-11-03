@@ -274,11 +274,13 @@ if(input)input.value='';resize();try{if(!overdrive){
         else kaiActivitySet(key,state,detail);
       };
       const finish=payload=>{try{kaiActivityFinish(payload||{});}catch{}};
-      const activeModelName=window.HAxBROKai51Bootstrap?.state?.()?.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M Instruct":"Qwen3-1.7B-Instruct");
+      const isInstantChat=/^(?:hi|hello|hey|yo|hiya|sup|what\s*up|what's\s*up|how\s*are\s*you|are\s*you\s*there|thanks|thank\s*you|thx|ok|okay|sure|yes|yeah|yep|no|nah|got\s*it)(?:\s+bro)?[!.?, ]*$/i.test(value.trim());
+      const activeModelName=isInstantChat?"KAI instant reply":(window.HAxBROKai51Bootstrap?.state?.()?.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M Instruct":"Qwen3-1.7B-Instruct"));
       try{
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-        kaiActivitySet('thinking','running',activeModelName+' is understanding your message and recent conversation.');
-        mark('router','KAI 51 · '+activeModelName,'Checking the connected HAxBRO workspace tools.','running');
+        if(isInstantChat)kaiActivitySet('thinking','done','Simple conversation · no model download or web search needed.');
+        else kaiActivitySet('thinking','running',activeModelName+' is understanding your message and recent conversation.');
+        mark('router','KAI 51 · '+activeModelName,isInstantChat?'Handling a short greeting without initializing the neural model.':'Checking the connected HAxBRO workspace tools.','running');
         let workspaceHandled=false;
         try{workspaceHandled=!!(await window.HAxBROKai51WorkspaceTools?.route?.(value));}catch(workspaceError){console.warn('KAI workspace tool routing failed; continuing with local chat.',workspaceError);}
         if(workspaceHandled){kaiActivitySet('router','done','The matching HAxBRO workspace tool was opened and received your request.');finish({sources:[],local:true,workspaceTool:true,model:activeModelName});return true;}
@@ -304,9 +306,9 @@ if(input)input.value='';resize();try{if(!overdrive){
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
         if(!result?.response)throw new Error(activeModelName+' returned no response.');
         const resolvedModelName=result.model||window.HAxBROKai51Bootstrap?.state?.()?.model||activeModelName;
-        kaiActivitySet('router','done',resolvedModelName+' generated the answer locally on this device.');
-        kaiActivitySet('composing','done','Response completed by '+resolvedModelName+'.');
-        finish({sources:result.sources||[],local:true,provider:result.provider||resolvedModelName+' · local on-device inference',model:resolvedModelName,research:!!result.research});
+        kaiActivitySet('router','done',result.instantReply?'Answered immediately without downloading or initializing a model.':resolvedModelName+' generated the answer locally on this device.');
+        kaiActivitySet('composing','done',result.instantReply?'Instant conversational reply completed.':'Response completed by '+resolvedModelName+'.');
+        finish({sources:result.sources||[],local:true,provider:result.provider||resolvedModelName+(result.instantReply?'':' · local on-device inference'),model:resolvedModelName,research:!!result.research,instantReply:!!result.instantReply});
         addMessage(result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
         return true;
       }catch(e){
