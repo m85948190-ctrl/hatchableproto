@@ -76,7 +76,7 @@
     if(/^(?:hi|hello|hey|yo|good morning|good afternoon|good evening|thanks|thank you|thx|ok|okay|sure|yes|yeah|yep|no|nah|got it)[!. ]*$/i.test(t)) return false;
     if(/^(?:how are you|what'?s up|what are you doing|are you there|who are you|what(?:'s| is) your name|what can you do|what do you think|can we talk|let'?s talk|can you help me)[?.! ]*$/i.test(t)) return false;
     if(/\b(?:what do you remember about me|what answer style do i prefer|my name is|call me|i prefer|i like|i feel|i'm bored|i am bored|rough day|bad day|need someone to talk)\b/i.test(t)) return false;
-    return /\b(?:explain|define|compare|contrast|analy[sz]e|investigate|research|look up|find out|verify|check|search|wikipedia|web\s?page|webpage|tell me about|teach me|describe|overview|latest|recent|today|news|price|cost|version|release|update|current|weather|according to|statistics|study|paper|official|history|fact|facts|population|capital|meaning|evidence|source|what causes|causes|who is|where is|when did|when was|why does|why do|why is|why are|how does|how do|how is|how are)\b/i.test(t);
+    return /\b(?:explain|define|compare|contrast|analy[sz]e|investigate|research|look up|find out|verify|check|search|wikipedia|web\s?page|webpage|tell me about|teach me|describe|overview|latest|recent|today|news|price|cost|version|release|update|current|weather|according to|statistics|study|paper|official|history|fact|facts|population|capital|meaning|evidence|source|what is|what are|what causes|causes|who is|who are|where is|where are|when did|when was|why did|why does|why do|why is|why are|how to|how can|how does|how do|how is|how are)\b/i.test(t);
   }
 
   async function searchWeb(query,mode='fast',signal){
@@ -184,10 +184,11 @@
     const query=queryFor(prompt);
     const wantsSearch=shouldSearch(prompt,history);
     let web=null,wiki=[],files=[];
+    const needsTrainingContext=/\b(?:code|coding|program|programming|script|debug|function|class|javascript|typescript|python|html|css|sql|api|react|node|algorithm|app maker|build an app|modify this app|publish|export)\b/i.test(prompt);
     const [retrieved,knowledge,trainingContext]=await Promise.all([
       wantsSearch ? searchFast(query,hooks?.signal,hooks?.searchMode||'normal') : Promise.resolve({web:null,wiki:[]}),
       wantsSearch ? searchKnowledge(query,hooks?.signal) : Promise.resolve([]),
-      trainingContextPrompt(prompt).catch(()=> '')
+      needsTrainingContext ? trainingContextPrompt(prompt).catch(()=> '') : Promise.resolve('')
     ]);ensureActive();
     web=retrieved.web;wiki=retrieved.wiki;files=knowledge;
     const sources=[];

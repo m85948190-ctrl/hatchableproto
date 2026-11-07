@@ -275,7 +275,7 @@ export default async function(req,res){
         const timeout=mode==="deep"?8500:6500;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
-        const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden/i.test(text);
+        const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden|wikimedia error|too many requests|error 429|http 429|rate limit/i.test(text);
         if(text.length>180&&!blocked)return {...x,text:text.slice(0,9000),readStatus:"page-read"};
         return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
       }catch{return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}

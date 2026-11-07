@@ -1,6 +1,6 @@
 const MODEL_ID = "HuggingFaceTB/SmolLM2-135M-Instruct";
 const MODEL_NAME = "SmolLM2 135M Instruct";
-const VERSION = "kai51-smollm2-135m-webgpu-v2";
+const VERSION = "kai51-smollm2-135m-chat-template-v3";
 
 export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}={}) {
   let generator = null;
@@ -48,13 +48,20 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
         }
       });
       report(91,"Testing local phone-model inference");
-      const check = await generator("User: Reply with the short word READY.\nAssistant:",{
-        max_new_tokens:12,
+      const checkPrompt = typeof generator.tokenizer?.apply_chat_template === "function"
+        ? generator.tokenizer.apply_chat_template([
+            {role:"system",content:"You are KAI 51. Reply briefly and naturally."},
+            {role:"user",content:"Reply with exactly the word READY."}
+          ],{tokenize:false,add_generation_prompt:true})
+        : "### Instruction:\nReply with exactly the word READY.\n### Response:\n";
+      const check = await generator(checkPrompt,{
+        max_new_tokens:16,
         temperature:0,
         do_sample:false,
         return_full_text:false
       });
-      const checkText=String(check?.[0]?.generated_text||"").trim();
+      const checkItem=check?.[0]?.generated_text;
+      const checkText=String(typeof checkItem==="string"?checkItem:checkItem?.at?.(-1)?.content||"").trim();
       if (!checkText) throw new Error("SmolLM2 loaded but its local self-test returned an empty response.");
       report(100,"SmolLM2 135M is ready locally on this phone");
       lastError=null;
@@ -72,21 +79,25 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
   async function generate(message,history=[],options={}) {
     await prepare();
     if(options.signal?.aborted) throw new DOMException("Response stopped by user","AbortError");
-    let prompt=String(message||"");
-    const tools=String(options.toolsJson||"[]");
-    if(tools!=="[]" && /search_web/.test(tools)) {
-      prompt += "\n\nAVAILABLE TOOL CALL FORMATS:\nFor current facts or source discovery, call search_web exactly as: <start_function_call>search_web(query: <escape>write the search query here<escape>)<end_function_call>. For a specific public page the user asks you to read, call browse_web exactly as: <start_function_call>browse_web(url: <escape>https://public-page.example<escape>)<end_function_call>. The browser is read-only: never log in, submit forms, click purchase buttons, or change accounts. Do not invent tool results. If no tool is needed, answer normally.";
-    }
-    const result=await generator(prompt,{
-      max_new_tokens:Math.min(260,Math.max(48,Number(options.maxTokens)||180)),
-      temperature:options.temperature??0.55,
+    const prompt=String(message||"").trim();
+    const messages=[
+      {role:"system",content:"You are KAI 51, the helpful conversational assistant inside HAxBRO AI. Answer greetings naturally, understand the exact request, and be concise but useful. When source evidence is included in the user's message, synthesize it carefully, cite only supplied source numbers, and never invent research. Do not output empty replies or simulated tool calls."},
+      {role:"user",content:prompt}
+    ];
+    const chatPrompt=typeof generator.tokenizer?.apply_chat_template==="function"
+      ? generator.tokenizer.apply_chat_template(messages,{tokenize:false,add_generation_prompt:true})
+      : "### Instruction:\n"+messages[0].content+"\n\n"+prompt+"\n### Response:\n";
+    const result=await generator(chatPrompt,{
+      max_new_tokens:Math.min(260,Math.max(64,Number(options.maxTokens)||180)),
+      temperature:options.temperature??0.65,
       top_p:options.topP??0.9,
-      do_sample:(options.temperature??0.55)>0,
+      do_sample:(options.temperature??0.65)>0,
       repetition_penalty:options.repPenalty??1.08,
       return_full_text:false
     });
     if(options.signal?.aborted) throw new DOMException("Response stopped by user","AbortError");
-    const response=String(result?.[0]?.generated_text||"").trim();
+    const item=result?.[0]?.generated_text;
+    const response=String(typeof item==="string"?item:item?.at?.(-1)?.content||"").trim();
     if(!response) throw new Error("SmolLM2 returned an empty response.");
     return {response,provider:MODEL_NAME+" · local "+activeDevice,model:MODEL_NAME,modelId:MODEL_ID,device:activeDevice,local:true,localModel:true,lane:"phone",quantization:activeDtype.toUpperCase()};
   }

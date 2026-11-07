@@ -525,6 +525,24 @@ async function kai51WorkspaceRoute(value){
       return true;
     }
     try{
+      const localHistory=active()?.items?.slice(-12)||[];
+      const localResult=await withChatTimeout(()=>window.HAxBROKai51Bootstrap?.generate?.(value,localHistory,{
+        signal:activeChatController?.signal,
+        searchMode:opts.searchMode==='deep'?'deep':'normal',
+        onStage:(stage,detail)=>kaiActivityStep('local-'+String(stage||'thinking'),'KAI 51 · '+String(stage||'thinking'),String(detail||'Local model is working'),'','running'),
+        onSources:sources=>kaiActivityResearch(sources||[])
+      }),330000,'Local KAI model response');
+      if(localResult?.response||localResult?.text){
+        kaiActivityResearch(localResult.sources||[]);
+        kaiActivityFinish(localResult);
+        addMessage(localResult.response||localResult.text,'bot',true,localResult.sources||[],{research:!!localResult.research,model:localResult.model||'',searchEngines:localResult.searchEngines||[]});
+        return true;
+      }
+    }catch(localError){
+      if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
+      console.warn('KAI local-first response failed; checking managed recovery lane',localError);
+    }
+    try{
       kaiActivityStep('thinking','KAI 51 · thinking','Understanding your message','','running');kaiActivityStep('language','Language layer','Detecting language and communication mode locally','','done');
       const chatController=activeChatController||new AbortController();const chatLimit=opts.searchMode==='quick'?15000:opts.searchMode==='deep'?90000:30000;const chatTimer=setTimeout(()=>chatController.abort(),chatLimit);const rr=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:chatController.signal,body:JSON.stringify({
         message:value,
