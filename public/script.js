@@ -526,7 +526,7 @@ async function kai51WorkspaceRoute(value){
     }
     try{
       const localHistory=active()?.items?.slice(-12)||[];
-      const localResult=await withChatTimeout(()=>window.HAxBROKai51Bootstrap?.generate?.(value,localHistory,{
+      const localResult=attachedImage?null:await withChatTimeout(()=>window.HAxBROKai51Bootstrap?.generate?.(value,localHistory,{
         signal:activeChatController?.signal,
         searchMode:opts.searchMode==='deep'?'deep':'normal',
         onStage:(stage,detail)=>kaiActivityStep('local-'+String(stage||'thinking'),'KAI 51 · '+String(stage||'thinking'),String(detail||'Local model is working'),'','running'),
