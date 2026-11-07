@@ -34,6 +34,26 @@
   function memoryCommand(message){const t=clean(message,800);let m=t.match(/^\s*(?:please\s+)?remember(?:\s+that)?\s*[:,-]?\s*(.+)$/i);if(m){const ok=rememberUser(m[1],'explicit');return {type:'remember',ok,text:clean(m[1],400)};}m=t.match(/^\s*(?:please\s+)?forget(?:\s+(?:that|about))?\s+(.+)$/i);if(m)return {type:'forget',...forgetUserMemory(m[1])};if(/^\s*(?:forget everything|forget all my memories|clear (?:my )?memory)\s*[.!]?\s*$/i.test(t))return {type:'forget',...forgetUserMemory()};return null;}
   function learnStatedPreference(message){const t=clean(message,700);const patterns=[/\bmy name is ([^.!?]{1,80})/i,/\bcall me ([^.!?]{1,80})/i,/\bi prefer ([^.!?]{1,180})/i,/\bi like ([^.!?]{1,160})/i,/\bi am building ([^.!?]{1,160})/i,/\bi'm building ([^.!?]{1,160})/i,/\bI work on ([^.!?]{1,160})/i];for(const re of patterns){const m=t.match(re);if(m){rememberUser(m[0],'stated-preference');break;}}}
   function userMemoryPrompt(){const items=readUserMemory().items;if(!items.length)return '';return 'USER MEMORY (persistent on this browser profile; treat as helpful context, not unquestionable truth):\n'+items.slice(-20).map(i=>'- '+i.text).join('\n')+'\nUse this naturally when relevant. Do not claim to remember anything absent from this list.\n\n';}
+  let trainingPackPromise=null;
+  function trainingContextPrompt(message=''){
+    if(!trainingPackPromise){
+      trainingPackPromise=(async()=>{
+        let pack=null;try{const response=await fetch('/api/kai-training-sync',{headers:{Accept:'application/json'},cache:'no-store'});if(response.ok){const data=await response.json();if(data?.ok&&Array.isArray(data.rules)){pack={version:data.pack?.version||0,checksum:data.pack?.checksum||'',rules:data.rules,examples:Array.isArray(data.examples)?data.examples:[]};try{localStorage.setItem('haxbro:kai51:training-pack:v1',JSON.stringify(pack));}catch{}}}}catch{}
+        if(pack)return pack;
+        try{const cached=JSON.parse(localStorage.getItem('haxbro:kai51:training-pack:v1')||'null');if(cached&&Array.isArray(cached.rules))return cached;}catch{}
+        return null;
+      })();
+    }
+    return trainingPackPromise.then(pack=>{
+      if(!pack)return '';
+      const t=clean(message,1200),coding=/\b(code|coding|program|programming|script|debug|function|class|javascript|typescript|python|html|css|sql|api|react|node|algorithm)\b/i.test(t),app=/\b(app|application|app maker|build an app|modify this app|publish|export)\b/i.test(t);
+      const rules=pack.rules.filter(x=>x&&typeof x.rule==='string'&&(x.capability==='general'||(coding&&x.capability==='code')||(app&&x.capability==='app-maker'))).slice(0,36);
+      const examples=pack.examples.filter(x=>x&&typeof x.response_contract==='string'&&(x.capability==='general'||(coding&&x.capability==='code')||(app&&x.capability==='app-maker'))).slice(0,5);
+      const ruleText=rules.map(x=>'- ['+String(x.capability||'general')+'] '+clean(x.rule,420)).join('\n');
+      const exampleText=examples.map(x=>'- Situation: '+clean(x.prompt,220)+'\n  Contract: '+clean(x.response_contract,360)).join('\n');
+      return 'ACTIVE HAxBRO KAI BEHAVIOR PACK v'+pack.version+' (checksum '+clean(pack.checksum,100)+')\nThese are response-quality and tool-use guidelines, not canned answers. Compose every reply from the current request and conversation; never output a fixed template just because a rule matches.\n'+ruleText+(exampleText?'\nILLUSTRATIVE RESPONSE CONTRACTS:\n'+exampleText:'')+'\n\n';
+    });
+  }
   // Conversational memory recall is handled by the neural model using userMemoryPrompt().
   // Source extraction is not a final answer: the retrieved evidence always goes to the neural synthesizer.
 
@@ -196,9 +216,10 @@
     const query=queryFor(prompt);
     const wantsSearch=shouldSearch(prompt,history);
     let web=null,wiki=[],files=[];
-    const [retrieved,knowledge]=await Promise.all([
+    const [retrieved,knowledge,trainingContext]=await Promise.all([
       wantsSearch ? searchFast(query,hooks?.signal,hooks?.searchMode||'normal') : Promise.resolve({web:null,wiki:[]}),
-      wantsSearch ? searchKnowledge(query,hooks?.signal) : Promise.resolve([])
+      wantsSearch ? searchKnowledge(query,hooks?.signal) : Promise.resolve([]),
+      trainingContextPrompt(prompt).catch(()=> '')
     ]);ensureActive();
     web=retrieved.web;wiki=retrieved.wiki;files=knowledge;
     const sources=[];
@@ -217,7 +238,7 @@
     const readableSources=unique.filter(s=>s.readStatus==='page-read'||s.readStatus==='wikipedia-article'||s.readStatus==='wikipedia-summary'||s.source==='HAxBRO Knowledge');
     hooks.onStage?.('composing','KAI 51 · neural model is interpreting the source material');
     const reason=readableSources.length?'Read source material is ready for neural interpretation':'No complete readable source was retrieved; KAI must disclose that research could not verify the answer';
-    const evidencePrompt=memoryContext+'You are KAI 51, using the active HAxBRO local conversational model (Qwen3-0.6B on compatible WebGPU desktops, Qwen3-0.6B CPU/WASM fallback on devices without compatible WebGPU; SmolLM2-135M on phones) to answer from retrieved evidence. Answer the exact user question in clear, natural language. First understand the question, then synthesize the strongest relevant facts from the sources. Compare sources where useful, explain important points and why they matter, distinguish verified facts from inference, and mention disagreements or missing evidence. Do not dump search results or copy source paragraphs. Cite claims inline as [1], [2], etc. using only the matching source numbers. Page-read and wikipedia-article entries contain readable page text; wikipedia-summary entries are abstracts, not full-page reads; HAxBRO Knowledge entries contain retrieved knowledge; search-snippet-fallback entries are leads, not verified page content. If the user explicitly requested current or source-backed research, say when readable evidence is absent or insufficient and never pretend the research verified the answer. For ordinary conversation or general-knowledge questions, answer directly from model knowledge and the supplied conversation context even when no sources were retrieved. If the user asks for a specific HAxBRO project fact that is not in the supplied knowledge records, be transparent rather than inventing it. If the evidence is partial or conflicting, be transparent. Answer in your own words, politely and helpfully.\n\nUSER REQUEST:\n'+prompt+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+(evidence||(wantsSearch?'No reliable retrieved web or knowledge evidence was available.':'No web search was requested. Answer ordinary questions from your model knowledge, saved memory and conversation context.'));
+    const evidencePrompt=trainingContext+memoryContext+'You are KAI 51, using the active HAxBRO local conversational model (Qwen3-0.6B on compatible WebGPU desktops, Qwen3-0.6B CPU/WASM fallback on devices without compatible WebGPU; SmolLM2-135M on phones) to answer from retrieved evidence. Answer the exact user question in clear, natural language. First understand the question, then synthesize the strongest relevant facts from the sources. Compare sources where useful, explain important points and why they matter, distinguish verified facts from inference, and mention disagreements or missing evidence. Do not dump search results or copy source paragraphs. Cite claims inline as [1], [2], etc. using only the matching source numbers. Page-read and wikipedia-article entries contain readable page text; wikipedia-summary entries are abstracts, not full-page reads; HAxBRO Knowledge entries contain retrieved knowledge; search-snippet-fallback entries are leads, not verified page content. If the user explicitly requested current or source-backed research, say when readable evidence is absent or insufficient and never pretend the research verified the answer. For ordinary conversation or general-knowledge questions, answer directly from model knowledge and the supplied conversation context even when no sources were retrieved. If the user asks for a specific HAxBRO project fact that is not in the supplied knowledge records, be transparent rather than inventing it. If the evidence is partial or conflicting, be transparent. Answer in your own words, politely and helpfully.\n\nUSER REQUEST:\n'+prompt+'\n\nRETRIEVED WEB / WIKIPEDIA / HAxBRO KNOWLEDGE EVIDENCE:\n'+(evidence||(wantsSearch?'No reliable retrieved web or knowledge evidence was available.':'No web search was requested. Answer ordinary questions from your model knowledge, saved memory and conversation context.'));
     return {lane:'local',handoff:true,research:wantsSearch,reason,evidencePrompt,response:null,provider:'KAI 51 · webpage retrieval tool',model:'HAxBRO selected local neural model',local:true,localModel:true,sources:unique.slice(0,evidenceLimit).map(({title,url,source,readStatus})=>({title,url,source,readStatus:readStatus||'retrieved'})),searchEngines:[...(web?.engine?[web.engine]:[]),...(wiki.length?['Wikipedia']:[])],retrievalMs:0};
   }
 
