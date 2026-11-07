@@ -12,7 +12,7 @@ export default async function(req,res){
         ok:true,
         source:'HATCHABLE',
         canonical:true,
-        model:{name:'KAI 51',base:'HuggingFaceTB/SmolLM2-360M-Instruct',weightsHostedInHatchable:false},
+        model:{name:'KAI 51',base:'Qwen/Qwen3-0.6B',browserRuntime:'onnx-community/Qwen3-0.6B-ONNX',parameterClass:'0.6B',weightsHostedInHatchable:false,codingMode:true,fineTuning:{method:'PEFT/LoRA',status:'pipeline-ready-not-trained'}},
         pack:{slug:pack.slug,version:pack.version,checksum:pack.checksum},
         rules:pack.rules,
         examples:pack.examples,
