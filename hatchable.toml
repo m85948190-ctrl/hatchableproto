@@ -4,8 +4,8 @@ providers = ["openai", "google"]
 description = "KAI 51 remains the HAxBRO identity and orchestration layer; managed language inference supplies natural-language generation without exposing a provider identity to users."
 
 [auth]
-enabled = true
-providers = ["email", "google"]
+enabled = false
+providers = []
 # Email OTP works on the Hatchable host. Google OAuth requires the owner to finish custom-domain and Google client setup in Hatchable Settings.
 
 [[secret]]
