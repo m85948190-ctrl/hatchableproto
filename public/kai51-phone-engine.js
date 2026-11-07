@@ -78,7 +78,7 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
       prompt += "\n\nAVAILABLE TOOL CALL FORMATS:\nFor current facts or source discovery, call search_web exactly as: <start_function_call>search_web(query: <escape>write the search query here<escape>)<end_function_call>. For a specific public page the user asks you to read, call browse_web exactly as: <start_function_call>browse_web(url: <escape>https://public-page.example<escape>)<end_function_call>. The browser is read-only: never log in, submit forms, click purchase buttons, or change accounts. Do not invent tool results. If no tool is needed, answer normally.";
     }
     const result=await generator(prompt,{
-      max_new_tokens:Math.min(220,Math.max(48,Number(options.maxTokens)||180)),
+      max_new_tokens:Math.min(260,Math.max(48,Number(options.maxTokens)||180)),
       temperature:options.temperature??0.55,
       top_p:options.topP??0.9,
       do_sample:(options.temperature??0.55)>0,

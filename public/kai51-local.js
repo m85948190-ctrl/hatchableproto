@@ -90,7 +90,7 @@
     return value ? {name,[key]:value} : null;
   }
   function explicitSearch(message) {
-    return /\b(search (the )?web|search online|look up online|browse the web|find sources|web research|latest|today|right now|current news|breaking news|verify online|fact.?check)\b/i.test(String(message || ""));
+    return /\b(search (the )?web|search online|look up online|browse the web|find sources|web research|wikipedia|web ?page|webpage|latest|today|right now|current news|breaking news|verify online|fact.?check)\b/i.test(String(message || ""));
   }
   function isArithmetic(message) {
     const value=String(message||"");
@@ -121,7 +121,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : (IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-0.6B · WebGPU/WASM fallback")});
     enginePromise = (async () => {
-      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=2" : "/kai51-local-engine.js?v=92";
+      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=3" : "/kai51-local-engine.js?v=92";
       const mod = await import(moduleUrl);
       const create = IS_PHONE ? mod.createKai51PhoneEngine : mod.createKai51Engine;
       if (typeof create !== "function") throw new Error(IS_PHONE ? "Phone model engine is missing createKai51PhoneEngine." : "Qwen engine module is missing createKai51Engine.");
@@ -282,7 +282,7 @@
       const recent = historyText(history,text);
       const prompt = KAI_SYSTEM + "\n\n" + utility.evidencePrompt + (recent ? "\n\nRECENT CONVERSATION:\n" + recent : "");
       hooks.onStage?.(utility.sources?.length ? "analyzing" : "thinking",utility.sources?.length ? MODEL + " is reasoning over " + utility.sources.length + " retrieved knowledge/source item(s)" : MODEL + " is composing an answer using the conversation and saved context");
-      const generated = await neural.generate(prompt,history,{signal:hooks.signal,maxTokens:IS_PHONE?180:520,temperature:0.45,topP:0.9});
+      const generated = await neural.generate(prompt,history,{signal:hooks.signal,maxTokens:IS_PHONE?240:520,temperature:0.45,topP:0.9});
       if (!generated?.response) throw new Error(MODEL + " returned an empty answer.");
       hooks.onStage?.("composing",MODEL + " completed the answer");
       return {...generated,lane:IS_PHONE ? "phone" : "qwen",model:MODEL,local:true,localModel:true,research:!!utility.research,sources:utility.sources||[],searchEngines:utility.searchEngines||[],combined:true,knowledgeUsed:(utility.sources||[]).some(source=>source?.source==="HAxBRO Knowledge")};
@@ -291,7 +291,7 @@
     if (research) {
       hooks.onStage?.("analyzing",MODEL + " is analysing "+(research.sources||[]).length+" retrieved source(s)");
       const final = await neural.generate(buildPrompt(text,history,research.evidence),history,{
-        signal:hooks.signal,maxTokens:IS_PHONE?180:420,temperature:0.35,topP:0.9
+        signal:hooks.signal,maxTokens:IS_PHONE?240:420,temperature:0.35,topP:0.9
       });
       if (!final?.response) throw new Error(MODEL + " returned an empty research answer.");
       hooks.onStage?.("composing",MODEL + " completed the source-based answer");
@@ -321,7 +321,7 @@
       ensureActive(hooks.signal);
       hooks.onStage?.("composing",MODEL + " is analysing the retrieved webpage evidence");
       const final = await neural.generate(buildPrompt(text,history,research.evidence),history,{
-        signal:hooks.signal,maxTokens:IS_PHONE?160:420,temperature:0.35,topP:0.9
+        signal:hooks.signal,maxTokens:IS_PHONE?240:420,temperature:0.35,topP:0.9
       });
       return {...final,lane:IS_PHONE ? "phone" : "qwen",provider:final.provider || MODEL + " · local on-device inference",model:MODEL,local:true,localModel:true,research:true,sources:research.sources||[],searchEngines:[research.engine||"Web search"],combined:true};
     }
