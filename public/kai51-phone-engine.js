@@ -1,6 +1,6 @@
 const MODEL_ID = "onnx-community/SmolLM2-135M-Instruct-ONNX-MHA";
 const MODEL_NAME = "SmolLM2 135M Instruct";
-const VERSION = "kai51-smollm2-135m-chat-template-v4";
+const VERSION = "kai51-smollm2-135m-chat-template-v5";
 
 export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}={}) {
   let generator = null;
@@ -40,9 +40,15 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
       const env = mod.env;
       if (env) {
         env.useBrowserCache = true;
+        env.useWasmCache = true;
         env.allowRemoteModels = true;
         env.allowLocalModels = false;
-        if (activeDevice === "wasm" && env.backends?.onnx?.wasm) env.backends.onnx.wasm.numThreads = Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2));
+        env.cacheKey = "haxbro-smollm2-135m-onnx-mha-v1";
+        if (activeDevice === "wasm" && env.backends?.onnx?.wasm) {
+          env.backends.onnx.wasm.numThreads = globalThis.crossOriginIsolated
+            ? Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2))
+            : 1;
+        }
       }
       if (typeof pipeline !== "function") throw new Error("Transformers.js did not expose its text-generation pipeline.");
       report(5,activeDevice === "webgpu" ? "Downloading SmolLM2 135M Q4F16 weights (about 118 MB) to this phone" : "Downloading SmolLM2 135M Q4 CPU-compatible weights (about 182 MB) to this phone");

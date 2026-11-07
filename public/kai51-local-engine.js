@@ -1,4 +1,4 @@
-const VERSION = "kai51-qwen3-0.6b-local-v3";
+const VERSION = "kai51-qwen3-0.6b-local-v4";
 const MODEL = "Qwen3-0.6B";
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 const MIN_BUFFER = 268435456;
@@ -36,7 +36,9 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       env.allowLocalModels=false;
       env.cacheKey="haxbro-qwen3-06b-v2";
       if(env.backends?.onnx?.wasm) {
-        env.backends.onnx.wasm.numThreads=Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2));
+        env.backends.onnx.wasm.numThreads=globalThis.crossOriginIsolated
+          ? Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2))
+          : 1;
       }
     }
     return transformers;
