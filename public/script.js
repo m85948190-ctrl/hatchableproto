@@ -526,12 +526,14 @@ async function kai51WorkspaceRoute(value){
     }
     try{
       const localHistory=active()?.items?.slice(-12)||[];
-      const localResult=attachedImage?null:await withChatTimeout(()=>window.HAxBROKai51Bootstrap?.generate?.(value,localHistory,{
+      if(!attachedImage&&!window.HAxBROKai51Bootstrap?.generate)throw new Error('KAI local model controller did not initialize. Reload the app after the new workspace scripts finish loading.');
+      const localResult=attachedImage?null:await withChatTimeout(()=>window.HAxBROKai51Bootstrap.generate(value,localHistory,{
         signal:activeChatController?.signal,
         searchMode:opts.searchMode==='deep'?'deep':'normal',
         onStage:(stage,detail)=>kaiActivityStep('local-'+String(stage||'thinking'),'KAI 51 · '+String(stage||'thinking'),String(detail||'Local model is working'),'','running'),
         onSources:sources=>kaiActivityResearch(sources||[])
       }),330000,'Local KAI model response');
+      if(!attachedImage&&!localResult?.response&&!localResult?.text)throw new Error('KAI local model completed without returning any answer text.');
       if(localResult?.response||localResult?.text){
         kaiActivityResearch(localResult.sources||[]);
         kaiActivityFinish(localResult);
@@ -540,7 +542,12 @@ async function kai51WorkspaceRoute(value){
       }
     }catch(localError){
       if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-      console.warn('KAI local-first response failed; checking managed recovery lane',localError);
+      const reason=String(localError?.message||localError||'Unknown local model error').slice(0,320);
+      console.error('KAI local model failed before a reply could be generated:',localError);
+      kaiActivityStep('model-error','KAI 51 · local model failed',reason,'','error');
+      kaiActivityFinish({localModel:false,error:reason});
+      addMessage('KAI could not generate a reply because the local model failed.\n\n'+reason+'\n\nYour message is safe. You can retry after the model status changes to READY.','bot');
+      return true;
     }
     try{
       kaiActivityStep('thinking','KAI 51 · thinking','Understanding your message','','running');kaiActivityStep('language','Language layer','Detecting language and communication mode locally','','done');

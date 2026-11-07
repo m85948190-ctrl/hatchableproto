@@ -22,7 +22,7 @@ export default async function(req, res) {
     openai: false,
     kai51: true,
     kai89: false,
-    kaiLite: true
+    kaiLite: false
   };
   return res.json({
     ok: true,
@@ -35,7 +35,7 @@ export default async function(req, res) {
       parameterClass: "0.6B",
       inference: "local browser inference; no hosted chat provider",
       desktop: { preferred: "WebGPU", quantization: "q4f16", fallback: "CPU/WASM q4 using the same Qwen3 weights" },
-      phone: { model: "SmolLM2-135M", reason: "preserve the compact phone download" },
+      phone: { model: "SmolLM2-135M-Instruct", browserRuntime: "onnx-community/SmolLM2-135M-Instruct-ONNX-MHA", preferred: "WebGPU Q4F16", fallback: "CPU/WASM Q4 using the same phone model", approximateDownload: "118 MB WebGPU Q4F16; about 182 MB CPU Q4" },
       research: { sharedAcrossBothDeviceModels: true, webSearch: ["Google", "Bing", "DuckDuckGo"], wikipedia: "search plus article-text extraction", webpageReading: "managed read-only browser extraction", synthesis: "the selected on-device model" },
       autoInstallOnVisit: true,
       browserCache: true,

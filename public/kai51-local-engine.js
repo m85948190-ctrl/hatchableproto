@@ -1,4 +1,4 @@
-const VERSION = "kai51-qwen3-0.6b-local-v2";
+const VERSION = "kai51-qwen3-0.6b-local-v3";
 const MODEL = "Qwen3-0.6B";
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 const MIN_BUFFER = 268435456;
@@ -57,11 +57,10 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       }
     }),600000,"Qwen3-0.6B "+device.toUpperCase()+" download and initialization");
     report(92,"Running Qwen3 local inference self-test");
-    const prompt=generator.tokenizer.apply_chat_template([
+    const check=await withTimeout(generator([
       {role:"system",content:"You are KAI 51. Answer briefly and accurately."},
       {role:"user",content:"Reply with exactly: KAI READY"}
-    ],{tokenize:false,add_generation_prompt:true,enable_thinking:false});
-    const check=await withTimeout(generator(prompt,{
+    ],{
       max_new_tokens:16,temperature:0,do_sample:false,return_full_text:false
     }),90000,"Qwen3-0.6B inference self-test");
     const item=check?.[0]?.generated_text;
@@ -132,10 +131,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     const abort=()=>{try{generator?.interrupt?.();}catch{}};
     options.signal?.addEventListener?.("abort",abort,{once:true});
     try {
-      const chatPrompt=generator.tokenizer.apply_chat_template(messages,{
-        tokenize:false,add_generation_prompt:true,enable_thinking:false
-      });
-      const generation=generator(chatPrompt,{
+      const generation=generator(messages,{
         max_new_tokens:Math.min(900,Math.max(48,Number(options.maxTokens)||420)),
         temperature:options.temperature??0.4,
         top_p:options.topP??0.9,

@@ -79,7 +79,7 @@
     const title=document.getElementById('kai51BootTitle');
     const body=document.getElementById('kai51BootText');
     if(title) title.textContent='KAI 51 · '+modelName.toUpperCase()+' IS LOADING';
-    if(body) body.textContent=phoneModel?'SmolLM2 135M downloads directly to this phone (about 118 MB with WebGPU; about 137 MB in CPU fallback) and runs locally. Later visits may reuse the browser cache.':'Qwen3-0.6B downloads compact quantized ONNX weights and runs locally through WebGPU where supported, with the existing SmolLM2-360M CPU/WASM compatibility fallback. Later visits may reuse the browser cache.';
+    if(body) body.textContent=phoneModel?'SmolLM2 135M downloads directly to this phone (about 118 MB with WebGPU; about 137 MB in CPU fallback) and runs locally. Later visits may reuse the browser cache.':'Qwen3-0.6B downloads compact quantized ONNX weights and runs locally through WebGPU where supported, with the same Qwen3 model on CPU/WASM when needed. Later visits may reuse the browser cache.';
     document.getElementById('kai51BootFill').style.width=pct+'%';
     document.getElementById('kai51BootPercent').textContent=pct+'%';
     document.getElementById('kai51BootStatus').textContent=String(d.status||'Preparing KAI 51');

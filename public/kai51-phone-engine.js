@@ -1,6 +1,6 @@
-const MODEL_ID = "HuggingFaceTB/SmolLM2-135M-Instruct";
+const MODEL_ID = "onnx-community/SmolLM2-135M-Instruct-ONNX-MHA";
 const MODEL_NAME = "SmolLM2 135M Instruct";
-const VERSION = "kai51-smollm2-135m-chat-template-v3";
+const VERSION = "kai51-smollm2-135m-chat-template-v4";
 
 export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}={}) {
   let generator = null;
@@ -16,17 +16,26 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
     if (generator) return {ok:true,model:MODEL_NAME,device:activeDevice,localModel:true};
     if (loading) return loading;
     loading = (async () => {
-      const adapter = globalThis.navigator?.gpu?.requestAdapter ? await navigator.gpu.requestAdapter() : null;
+      let adapter = null;
+      try {
+        if (globalThis.navigator?.gpu?.requestAdapter) {
+          adapter = await Promise.race([
+            navigator.gpu.requestAdapter({powerPreference:"low-power"}),
+            new Promise(resolve=>setTimeout(()=>resolve(null),6000))
+          ]);
+        }
+      } catch {}
       const supportsFp16 = !!adapter?.features?.has?.("shader-f16");
-      if (adapter && supportsFp16) {
+      const hasBuffer = Number(adapter?.limits?.maxBufferSize||0) >= 134217728;
+      if (adapter && supportsFp16 && hasBuffer) {
         activeDevice = "webgpu";
         activeDtype = "q4f16";
       } else {
         activeDevice = "wasm";
-        activeDtype = "q8";
+        activeDtype = "q4";
       }
       report(2,activeDevice === "webgpu" ? "Preparing the 118 MB phone model for WebGPU" : "Preparing the compact phone model for CPU compatibility");
-      const mod = await import("https://esm.sh/@huggingface/transformers@3.7.2");
+      const mod = await import("https://esm.sh/@huggingface/transformers@4.3.0");
       const pipeline = mod.pipeline;
       const env = mod.env;
       if (env) {
@@ -36,7 +45,7 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
         if (activeDevice === "wasm" && env.backends?.onnx?.wasm) env.backends.onnx.wasm.numThreads = Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2));
       }
       if (typeof pipeline !== "function") throw new Error("Transformers.js did not expose its text-generation pipeline.");
-      report(5,activeDevice === "webgpu" ? "Downloading SmolLM2 135M Q4F16 weights (about 118 MB) to this phone" : "Downloading SmolLM2 135M Q8 CPU-compatible weights (about 137 MB) to this phone");
+      report(5,activeDevice === "webgpu" ? "Downloading SmolLM2 135M Q4F16 weights (about 118 MB) to this phone" : "Downloading SmolLM2 135M Q4 CPU-compatible weights (about 182 MB) to this phone");
       generator = await pipeline("text-generation",MODEL_ID,{
         device:activeDevice,
         dtype:activeDtype,
@@ -48,13 +57,10 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
         }
       });
       report(91,"Testing local phone-model inference");
-      const checkPrompt = typeof generator.tokenizer?.apply_chat_template === "function"
-        ? generator.tokenizer.apply_chat_template([
-            {role:"system",content:"You are KAI 51. Reply briefly and naturally."},
-            {role:"user",content:"Reply with exactly the word READY."}
-          ],{tokenize:false,add_generation_prompt:true})
-        : "### Instruction:\nReply with exactly the word READY.\n### Response:\n";
-      const check = await generator(checkPrompt,{
+      const check = await generator([
+        {role:"system",content:"You are KAI 51. Reply briefly and naturally."},
+        {role:"user",content:"Reply with exactly the word READY."}
+      ],{
         max_new_tokens:16,
         temperature:0,
         do_sample:false,
@@ -62,7 +68,7 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
       });
       const checkItem=check?.[0]?.generated_text;
       const checkText=String(typeof checkItem==="string"?checkItem:checkItem?.at?.(-1)?.content||"").trim();
-      if (!checkText) throw new Error("SmolLM2 loaded but its local self-test returned an empty response.");
+      if (!/READY/i.test(checkText)) throw new Error("SmolLM2 loaded but failed its READY inference self-test: "+checkText.slice(0,100));
       report(100,"SmolLM2 135M is ready locally on this phone");
       lastError=null;
       try { onReady({model:MODEL_NAME,modelId:MODEL_ID,device:activeDevice,verified:true,realModel:true,localModel:true,lane:"phone",quantization:activeDtype.toUpperCase()}); } catch {}
@@ -84,23 +90,30 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
       {role:"system",content:"You are KAI 51, the helpful conversational assistant inside HAxBRO AI. Answer greetings naturally, understand the exact request, and be concise but useful. When source evidence is included in the user's message, synthesize it carefully, cite only supplied source numbers, and never invent research. Do not output empty replies or simulated tool calls."},
       {role:"user",content:prompt}
     ];
-    const chatPrompt=typeof generator.tokenizer?.apply_chat_template==="function"
-      ? generator.tokenizer.apply_chat_template(messages,{tokenize:false,add_generation_prompt:true})
-      : "### Instruction:\n"+messages[0].content+"\n\n"+prompt+"\n### Response:\n";
-    const result=await generator(chatPrompt,{
-      max_new_tokens:Math.min(260,Math.max(64,Number(options.maxTokens)||180)),
-      temperature:options.temperature??0.65,
-      top_p:options.topP??0.9,
-      do_sample:(options.temperature??0.65)>0,
-      repetition_penalty:options.repPenalty??1.08,
-      return_full_text:false
-    });
-    if(options.signal?.aborted) throw new DOMException("Response stopped by user","AbortError");
-    const item=result?.[0]?.generated_text;
-    const response=String(typeof item==="string"?item:item?.at?.(-1)?.content||"").trim();
-    if(!response) throw new Error("SmolLM2 returned an empty response.");
-    return {response,provider:MODEL_NAME+" · local "+activeDevice,model:MODEL_NAME,modelId:MODEL_ID,device:activeDevice,local:true,localModel:true,lane:"phone",quantization:activeDtype.toUpperCase()};
-  }
+    let timer;
+    const abort=()=>{try{generator?.interrupt?.();}catch{}};
+    options.signal?.addEventListener?.("abort",abort,{once:true});
+    try {
+      const generation=generator(messages,{
+        max_new_tokens:Math.min(260,Math.max(64,Number(options.maxTokens)||180)),
+        temperature:options.temperature??0.65,
+        top_p:options.topP??0.9,
+        do_sample:(options.temperature??0.65)>0,
+        repetition_penalty:options.repPenalty??1.08,
+        return_full_text:false
+      });
+      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error("SmolLM2 135M generation exceeded 90 seconds on this phone."));},90000);});
+      const result=await Promise.race([generation,timeout]);
+      if(options.signal?.aborted) throw new DOMException("Response stopped by user","AbortError");
+      const item=result?.[0]?.generated_text;
+      const response=String(typeof item==="string"?item:item?.at?.(-1)?.content||"").trim();
+      if(!response) throw new Error("SmolLM2 returned an empty response.");
+      return {response,provider:MODEL_NAME+" · local "+activeDevice,model:MODEL_NAME,modelId:MODEL_ID,device:activeDevice,local:true,localModel:true,lane:"phone",quantization:activeDtype.toUpperCase()};
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener?.("abort",abort);
+    }
+    }
 
   return {
     version:VERSION,model:MODEL_NAME,prepare,generate,chat:generate,

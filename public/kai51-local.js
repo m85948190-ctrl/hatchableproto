@@ -1,12 +1,14 @@
 (() => {
   const IS_PHONE = window.HAxBRODeviceProfile?.isPhone === true || window.HAxBRO_DEVICE === "ios" || window.HAxBRO_DEVICE === "android";
-  const VERSION = IS_PHONE ? "kai51-phone-smollm2-v1" : "kai51-desktop-qwen3-0.6b-local-v2";
+  const VERSION = IS_PHONE ? "kai51-phone-smollm2-135m-v4" : "kai51-desktop-qwen3-0.6b-v3";
   const MODEL = IS_PHONE ? "SmolLM2 135M Instruct" : "Qwen3-0.6B-Instruct";
-  const ENGINE_VERSION = IS_PHONE ? "kai51-smollm2-135m-webgpu-v2" : "kai51-qwen3-0.6b-local-v2";
+  const ENGINE_VERSION = IS_PHONE ? "kai51-smollm2-135m-chat-template-v4" : "kai51-qwen3-0.6b-local-v3";
   // Model weights and installation state belong to this browser/device, not
   // to an individual local username. All HAxBRO profiles reuse one model cache.
-  const KEY = () => "haxbro:kai51:device" + (IS_PHONE ? ":phone-installation:v1" : ":qwen3-0.6b-installation:v1");
+  const KEY = () => "haxbro:kai51:device" + (IS_PHONE ? ":phone-installation:v2" : ":qwen3-0.6b-installation:v2");
   let state = readState();
+  const modelLabel = document.getElementById("selectedModelLabel");
+  if (modelLabel) modelLabel.textContent = IS_PHONE ? "KAI · 135M" : "KAI · 600M";
   let enginePromise = null;
   let engine = null;
 
@@ -124,7 +126,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : (IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-0.6B · WebGPU/WASM fallback")});
     enginePromise = (async () => {
-      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=4" : "/kai51-local-engine.js?v=92";
+      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=5" : "/kai51-local-engine.js?v=93";
       const mod = await import(moduleUrl);
       const create = IS_PHONE ? mod.createKai51PhoneEngine : mod.createKai51Engine;
       if (typeof create !== "function") throw new Error(IS_PHONE ? "Phone model engine is missing createKai51PhoneEngine." : "Qwen engine module is missing createKai51Engine.");
