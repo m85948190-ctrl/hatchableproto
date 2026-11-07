@@ -1,7 +1,7 @@
 (() => {
   /* KAI 51 LOCAL: fast evidence retrieval + neural conversation.
      This file routes and gathers evidence; it must not fabricate a response from phrase rules. */
-  const VERSION='kai51-local-evidence-synthesis-v19-qwen06-multipage';
+  const VERSION='kai51-local-evidence-synthesis-v20-single-research-pipeline';
   const clean=(v,n=9000)=>String(v??'').replace(/\u0000/g,'').trim().slice(0,n);
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
@@ -95,46 +95,14 @@
     return {ok:true,engine:d.engine||'Google + Bing + DuckDuckGo + Wikipedia',sources,engines:d.engines||[],links:sources.map(({title,url,engine})=>({title,url,engine}))};
   }
 
-  async function searchWikipedia(query){
-    const title=clean(query,220).replace(/^\s*(?:please\s+)?(?:what is|what are|who is|who are|where is|where are|tell me about|explain)\s+/i,'').replace(/^\s*(?:the\s+)?(?:current|latest|recent)\s+/i,'').replace(/[?!.]+$/,'').trim();
-    const summary=async(name,timeout=1100)=>{
-      const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeout);
-      try{
-        const p=await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(name.replace(/\s+/g,'_')),{mode:'cors',cache:'no-store',signal:controller.signal});
-        if(!p.ok)return null;
-        const x=await p.json();
-        if(!x?.extract||x.type==='disambiguation')return null;
-        return {title:x.title||name,url:x.content_urls?.desktop?.page||('https://en.wikipedia.org/wiki/'+encodeURIComponent(String(x.title||name).replace(/ /g,'_'))),text:clean(x.extract,2200),source:'Wikipedia',readStatus:'wikipedia-summary'};
-      }catch{return null}finally{clearTimeout(timer)}
-    };
-    /* Exact-topic summaries are faster and more relevant than broad search results. */
-    if(title&&title.split(/\s+/).length<=5){
-      const direct=await summary(title,1000);
-      if(direct)return [direct];
-    }
-    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),1300);
-    try{
-      const url='https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(title||query)+'&srlimit=4&format=json&origin=*';
-      const r=await fetch(url,{mode:'cors',cache:'no-store',signal:controller.signal});
-      if(!r.ok)throw new Error('Wikipedia HTTP '+r.status);
-      const d=await r.json();
-      const rows=Array.isArray(d?.query?.search)?d.query.search:[];
-      const terms=words(title).filter(w=>w.length>2&&!STOP_WORDS.has(w));
-      const summaries=await Promise.all(rows.slice(0,3).map(row=>summary(String(row.title||''),1300)));
-      return summaries.filter(Boolean).map(x=>({...x,_score:terms.filter(t=>(x.title+' '+x.text).toLowerCase().includes(t)).length})).filter(x=>x._score>0).sort((a,b)=>b._score-a._score).map(({_score,...x})=>x).slice(0,2);
-    }finally{clearTimeout(timer)}
-  }
-
   async function searchFast(query,signal,searchMode='normal'){
     const mode=searchMode==='deep'?'deep':'fast';
-    // Web search opens and reads result pages. Give that work enough time to finish
-    // before the neural model starts; the chat watchdog remains the outer limit.
-    const deadlineMs=19000;
+    // The single server research endpoint already combines Google/Bing/DDG,
+    // Wikipedia article extraction, and readable result-page extraction.
+    // Do not launch a second client-side Wikipedia search for the same question.
+    const deadlineMs=mode==='deep'?28000:19000;
     const deadline=new Promise(resolve=>setTimeout(()=>resolve({web:null,wiki:[]}),deadlineMs));
-    const retrieval=Promise.all([
-      searchWeb(query,mode,signal).catch(()=>null),
-      searchWikipedia(query).catch(()=>[])
-    ]).then(([web,wiki])=>({web,wiki}));
+    const retrieval=searchWeb(query,mode,signal).then(web=>({web,wiki:[]}));
     return Promise.race([retrieval,deadline]);
   }
 

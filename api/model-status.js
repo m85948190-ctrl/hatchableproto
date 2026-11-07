@@ -36,11 +36,12 @@ export default async function(req, res) {
       inference: "local browser inference; no hosted chat provider",
       desktop: { preferred: "WebGPU", quantization: "q4f16", fallback: "CPU/WASM q4 using the same Qwen3 weights" },
       phone: { model: "SmolLM2-135M", reason: "preserve the compact phone download" },
+      research: { sharedAcrossBothDeviceModels: true, webSearch: ["Google", "Bing", "DuckDuckGo"], wikipedia: "search plus article-text extraction", webpageReading: "managed read-only browser extraction", synthesis: "the selected on-device model" },
       autoInstallOnVisit: true,
       browserCache: true,
       codingMode: true,
       fineTuning: { method: "PEFT/LoRA", status: "training pipeline prepared; fine-tuned weights not yet produced" }
     },
-    readiness: "This endpoint reports configuration only. The browser reports model ready only after its Qwen3 KAI READY self-test succeeds."
+    readiness: "This endpoint reports configuration only. Each browser reports its selected device model ready only after that model completes its own local inference self-test."
   });
 }
