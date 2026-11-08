@@ -183,9 +183,9 @@ function kaiActivityFinish(data){
    },420);
  },releaseAfter);
 }
-function setBusy(v,profile='heavy'){
+function setBusy(v,profile='heavy',options={}){
  const b=$('#sendBtn');if(b){if(!b.dataset.sendIdleHtml)b.dataset.sendIdleHtml=b.innerHTML;b.disabled=false;b.classList.toggle('busy',v);b.classList.toggle('stop-mode',v);b.setAttribute('aria-busy',v?'true':'false');b.setAttribute('aria-label',v?'Stop response':'Send');b.title=v?'Stop generating response':'Send message';b.innerHTML=v?'<svg class="kai-stop-square" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>':b.dataset.sendIdleHtml}
- if(v)kaiActivityStart(profile);
+ if(v&&!options.deferActivity)kaiActivityStart(profile);
  else if(thinkingBubble&&!thinkingBubble.classList.contains('is-complete')){
    const bubble=thinkingBubble,token=thinkingSeq;
    if(thinkingTimer){clearInterval(thinkingTimer);thinkingTimer=null}
@@ -266,7 +266,8 @@ if(input)input.value='';resize();try{if(!overdrive){
       const selectedModel='kai-router';
       window.HAxBROSelectedModel='kai-router';
       try{localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}catch{}
-      setBusy(true,'heavy');
+      // Lock the composer immediately, but do not show AI thinking before the first web results.
+      setBusy(true,'heavy',{deferActivity:true});
       const history=active()?.items?.slice(-12)||[];
       const mark=(key,label,detail,state='running')=>{
         if(state==='running')kaiActivityStep(key,label,detail,'','running');
@@ -287,10 +288,14 @@ if(input)input.value='';resize();try{if(!overdrive){
             firstSearchCardShown=true;
             addMessage("Web search results are ready. KAI is reviewing these sources before its independent second search.",'bot',true,sources,{attempted:true,engines:[...new Set(sources.map(s=>s?.source).filter(Boolean))]});
             const resultCard=messages?.lastElementChild;
-            if(thinkingBubble&&resultCard&&resultCard!==thinkingBubble)messages.insertBefore(resultCard,thinkingBubble);
+            // The search result card is rendered first; the animated AI-thinking panel is created after it.
+            if(!thinkingBubble)kaiActivityStart('heavy');
+            if(thinkingBubble&&resultCard&&resultCard!==thinkingBubble&&resultCard.nextSibling!==thinkingBubble)messages.insertBefore(thinkingBubble,resultCard.nextSibling);
           },
           signal:activeChatController?.signal,
           onStage:(stage,detail)=>{
+            // If search fails or this is a non-web question, start the thinking panel at the model stage.
+            if(!thinkingBubble&&['web-search-done','web-search-error','model','model-thinking','thinking'].includes(stage))kaiActivityStart('heavy');
             // Keep the two user-visible phases separate. Step 1 is independent
             // retrieval; Step 2 begins only when the local neural model is ready.
             if(stage==='web-search'){mark('step-web','STEP 1 · Web Search',detail||'Searching multiple websites independently of the model.','running');return;}
