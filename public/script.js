@@ -266,7 +266,8 @@ if(input)input.value='';resize();try{if(!overdrive){
       const selectedModel='kai-router';
       window.HAxBROSelectedModel='kai-router';
       try{localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}catch{}
-      // Lock the composer immediately, but do not show AI thinking before the first web results.
+      // Lock the composer immediately. The activity panel begins with the first real web-search stage;
+      // when sources arrive, onSources moves the same panel directly below the results card.
       setBusy(true,'heavy',{deferActivity:true});
       const history=active()?.items?.slice(-12)||[];
       const mark=(key,label,detail,state='running')=>{
@@ -294,12 +295,13 @@ if(input)input.value='';resize();try{if(!overdrive){
           },
           signal:activeChatController?.signal,
           onStage:(stage,detail)=>{
-            // If search fails or this is a non-web question, start the thinking panel at the model stage.
-            if(!thinkingBubble&&['web-search-done','web-search-error','model','model-thinking','thinking'].includes(stage))kaiActivityStart('heavy');
+            // Start the animated panel as soon as real first-pass retrieval begins.
+            // onSources will place the returned results card above this same panel.
+            if(!thinkingBubble&&['web-search','searching','web-reading','web-search-done','web-search-error','model','model-thinking','thinking'].includes(stage))kaiActivityStart('heavy');
             // Keep the two user-visible phases separate. Step 1 is independent
             // retrieval; Step 2 begins only when the local neural model is ready.
-            if(stage==='web-search'){mark('step-web','STEP 1 · Web Search',detail||'Searching multiple websites independently of the model.','running');return;}
-            if(stage==='searching'){mark('step-web','STEP 1 · Web Search','Searching multiple sources across the web.','running');return;}
+            if(stage==='web-search'){mark('step-web','Finding web results',detail||'Starting the first search across multiple websites.','running');return;}
+            if(stage==='searching'){mark('step-web','Searching multiple websites','Collecting and checking results from multiple web sources.','running');return;}
             if(stage==='web-reading'){mark('step-web','STEP 1 · Reading Websites',detail||'Opening and extracting readable webpage content.','running');return;}
             if(stage==='web-search-done'){mark('step-web','STEP 1 · Web Search Complete',detail||'First-pass web research is complete.','done');return;}
             if(stage==='web-search-error'){mark('step-web','STEP 1 · Web Search',detail||'First search pass was unavailable.','error');return;}
