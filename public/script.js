@@ -317,9 +317,10 @@ if(input)input.value='';resize();try{if(!overdrive){
               thinking:activeModelName+' is understanding the request',
               searching:'Searching and reading webpages',
               analyzing:activeModelName+' is evaluating retrieved evidence',
-              composing:activeModelName+' is writing the response'
+              composing:activeModelName+' is writing the response',
+              interpreting:activeModelName+' is interpreting your intent and context'
             };
-            const keys={searching:'searching',analyzing:'analyzing',composing:'composing'};
+            const keys={searching:'searching',analyzing:'analyzing',composing:'composing',interpreting:'interpreting'};
             if(stage==='analyzing'){mark('step-reading','STEP 2 · AI Reading',detail||'The local model is evaluating retrieved evidence.','running');return;}
             if(stage==='composing'){mark('step-summary','STEP 2 · AI Summary',detail||'The local model completed its summary.','done');}
             mark(keys[stage]||'router',labels[stage]||activeModelName,detail||'Processing this stage','running');
