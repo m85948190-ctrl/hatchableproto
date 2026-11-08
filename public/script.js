@@ -326,7 +326,7 @@ if(input)input.value='';resize();try{if(!overdrive){
         kaiActivitySet('router','done',resolvedModelName+' generated the answer locally on this device.');
         kaiActivitySet('composing','done','Response completed by '+resolvedModelName+'.');
         finish({sources:result.sources||[],local:true,provider:result.provider||resolvedModelName+' · local on-device inference',model:resolvedModelName,research:!!result.research});
-        addMessage(result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
+        addMessage((result.research?'**AI Overview**\\n\\n':'')+result.response,'bot',true,result.sources||[],{attempted:!!result.research,engines:result.searchEngines||[]});
         return true;
       }catch(e){
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
@@ -334,7 +334,8 @@ if(input)input.value='';resize();try{if(!overdrive){
         kaiActivitySet('router','error',activeModelName+' could not complete this response on this device.');
         const failureDetails=String(e?.message||e||'unknown local model failure').slice(0,900);
         finish({sources:[],local:true,provider:activeModelName+' · local WebGPU',error:failureDetails});
-        addMessage('KAI could not complete this response with '+activeModelName+' on this device. No cloud AI fallback was used. Details: '+failureDetails,'bot');
+        const researchFailure=/zero readable sources|web research|search pass|second search|distinct readable source/i.test(failureDetails);
+        addMessage((researchFailure?'Web research could not complete. The local model was not necessarily the cause. ':'KAI could not complete this response with '+activeModelName+' on this device. No cloud AI fallback was used. ')+'Details: '+failureDetails,'bot');
         return true;
       }
       const bootstrapState=window.HAxBROKai51Bootstrap?.state?.()||{};
