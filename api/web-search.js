@@ -81,7 +81,7 @@ async function fetchText(url, timeout = 7000) {
   } finally { clearTimeout(timer); }
 }
 async function bingWeb(query) {
-  const url = "https://www.bing.com/search?format=rss&mkt=en-IN&q=" + encodeURIComponent(query);
+  const url = "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query);
   const xml = await fetchText(url);
   return (xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) || []).map(item => {
     const title = xmlTag(item, "title");
