@@ -1,8 +1,8 @@
-const VERSION = "kai51-qwen3-0.6b-local-v4";
+const VERSION = "kai51-qwen3-0.6b-local-v5";
 const MODEL = "Qwen3-0.6B";
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 const MIN_BUFFER = 268435456;
-const TRANSFORMERS_URL = "https://esm.sh/@huggingface/transformers@4.3.0";
+const TRANSFORMERS_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2";
 
 export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
   let generator = null;
@@ -34,7 +34,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
       env.useWasmCache=true;
       env.allowRemoteModels=true;
       env.allowLocalModels=false;
-      env.cacheKey="haxbro-qwen3-06b-v2";
+      env.cacheKey="haxbro-qwen3-06b-v3";
       if(env.backends?.onnx?.wasm) {
         env.backends.onnx.wasm.numThreads=globalThis.crossOriginIsolated
           ? Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2))

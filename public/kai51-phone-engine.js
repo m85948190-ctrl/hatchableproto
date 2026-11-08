@@ -1,6 +1,6 @@
 const MODEL_ID = "onnx-community/SmolLM2-135M-Instruct-ONNX-MHA";
 const MODEL_NAME = "SmolLM2 135M Instruct";
-const VERSION = "kai51-smollm2-135m-chat-template-v5";
+const VERSION = "kai51-smollm2-135m-chat-template-v6";
 
 export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}={}) {
   let generator = null;
@@ -35,7 +35,7 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
         activeDtype = "q4";
       }
       report(2,activeDevice === "webgpu" ? "Preparing the 118 MB phone model for WebGPU" : "Preparing the compact phone model for CPU compatibility");
-      const mod = await import("https://esm.sh/@huggingface/transformers@4.3.0");
+      const mod = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2");
       const pipeline = mod.pipeline;
       const env = mod.env;
       if (env) {
@@ -43,7 +43,7 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
         env.useWasmCache = true;
         env.allowRemoteModels = true;
         env.allowLocalModels = false;
-        env.cacheKey = "haxbro-smollm2-135m-onnx-mha-v1";
+        env.cacheKey = "haxbro-smollm2-135m-onnx-mha-v2";
         if (activeDevice === "wasm" && env.backends?.onnx?.wasm) {
           env.backends.onnx.wasm.numThreads = globalThis.crossOriginIsolated
             ? Math.max(1,Math.min(4,Number(navigator.hardwareConcurrency)||2))
