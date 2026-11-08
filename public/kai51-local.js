@@ -448,6 +448,45 @@
   async function routerGenerate(message,history=[],hooks={}) {
     return unifiedGenerate(message,history,hooks);
   }
+  // Standalone web-search tool; it does not wait for or initialize the local model.
+  window.HAxBROWebSearchTool = Object.freeze({
+    version:"1.0.0",endpoint:"/api/kai/search",
+    async search(query,options={}) {
+      const q=String(query||"").trim();
+      if(!q) throw new Error("A web-search query is required.");
+      const controller=new AbortController();
+      const timeout=Math.max(3000,Math.min(45000,Number(options.timeout)||20000));
+      const timer=setTimeout(()=>controller.abort(),timeout);
+      const externalSignal=options.signal;
+      const abort=()=>controller.abort();
+      externalSignal?.addEventListener?.("abort",abort,{once:true});
+      try {
+        const response=await fetch("/api/kai/search",{
+          method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},
+          signal:controller.signal,priority:"high",
+          body:JSON.stringify({query:q,mode:options.mode==="deep"?"deep":"fast"})
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok||!data?.ok) throw new Error(data?.error||"Web search failed with HTTP "+response.status);
+        const seen=new Set();
+        const results=(Array.isArray(data.sources)?data.sources:[]).filter(item=>{
+          const url=String(item?.url||"");
+          if(!(url.startsWith("https://")||url.startsWith("http://")))return false;
+          const key=url.split("#")[0];
+          if(seen.has(key))return false;seen.add(key);return true;
+        }).map(item=>({
+          title:String(item.title||"Untitled website").slice(0,240),
+          url:String(item.url).slice(0,1200),
+          snippet:String(item.text||item.snippet||"").slice(0,9000),
+          engine:String(item.engine||item.source||"Web search"),
+          readStatus:String(item.readStatus||"search-result")
+        }));
+        return {ok:true,query:q,engine:data.engine||"Web search",engines:data.engines||{},count:results.length,results};
+      } finally {
+        clearTimeout(timer);externalSignal?.removeEventListener?.("abort",abort);
+      }
+    }
+  });
   window.HAxBROKai51Bootstrap = {
     version:VERSION,
     state:status,
