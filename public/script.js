@@ -117,8 +117,8 @@ function kaiActivityStart(profile='heavy'){
  const label=profile==='light'?'KAI FAST · LIVE':'KAI 51 · LIVE';
  const estimate=profile==='light'?6:12; thinkingEstimateSec=estimate;
  thinkingBubble.innerHTML='<div class="kai-activity-head"><div class="kai-thinking-pill" aria-hidden="true"><span class="kai-thinking-pill-track"><i class="kai-thinking-pill-dot"></i><span class="kai-thinking-pill-label">'+label+'</span></span></div><div class="kai-timer"><span class="kai-timer-estimate"><b>'+estimate+'</b></span><span class="kai-timer-live">LIVE <b class="kai-activity-time">0s</b></span></div></div><div class="kai-activity-list"></div>';
- /* Start with only the real current state. Search/model/build rows are added by their actual pipeline events. */
- kaiActivityStep('thinking','Thinking','Understanding your request and working out the next step.','','running');
+ /* Start with no assumed AI-thinking state. The first visible row is added by the
+    actual independent web-search event; model-thinking appears only after search completes. */
  messages.appendChild(thinkingBubble);
  thinkingTimer=setInterval(()=>{
    if(token!==thinkingSeq||thinkingBubble!==bubble){clearInterval(thinkingTimer);thinkingTimer=null;return}
@@ -267,7 +267,6 @@ if(input)input.value='';resize();try{if(!overdrive){
       window.HAxBROSelectedModel='kai-router';
       try{localStorage.setItem(haxbroUserKey('model_choice'),'kai-router')}catch{}
       setBusy(true,'heavy');
-      kaiActivityStart('heavy');
       const history=active()?.items?.slice(-12)||[];
       const mark=(key,label,detail,state='running')=>{
         if(state==='running')kaiActivityStep(key,label,detail,'','running');
@@ -277,8 +276,6 @@ if(input)input.value='';resize();try{if(!overdrive){
       const activeModelName=window.HAxBROKai51Bootstrap?.state?.()?.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M Instruct":"Qwen3-0.6B-Instruct");
       try{
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
-        kaiActivitySet('thinking','running',activeModelName+' is understanding your message and recent conversation.');
-        mark('router','KAI 51 · '+activeModelName,'Checking the connected HAxBRO workspace tools.','running');
         let workspaceHandled=false;
         try{workspaceHandled=!!(await window.HAxBROKai51WorkspaceTools?.route?.(value));}catch(workspaceError){console.warn('KAI workspace tool routing failed; continuing with local chat.',workspaceError);}
         if(workspaceHandled){kaiActivitySet('router','done','The matching HAxBRO workspace tool was opened and received your request.');finish({sources:[],local:true,workspaceTool:true,model:activeModelName});return true;}
@@ -289,10 +286,13 @@ if(input)input.value='';resize();try{if(!overdrive){
           onStage:(stage,detail)=>{
             // Keep the two user-visible phases separate. Step 1 is independent
             // retrieval; Step 2 begins only when the local neural model is ready.
-            if(stage==='web-search'){mark('step-web','STEP 1 · Independent Web Search',detail||'Searching multiple sources before model synthesis.','running');return;}
-            if(stage==='web-search-done'){mark('step-web','STEP 1 · Independent Web Search',detail||'First-pass research collected.','done');return;}
-            if(stage==='web-search-error'){mark('step-web','STEP 1 · Independent Web Search',detail||'First search pass was unavailable.','error');return;}
-            if(stage==='model-thinking'){mark('step-ai','STEP 2 · AI Model Thinking',detail||activeModelName+' is preparing its independent research.','running');return;}
+            if(stage==='web-search'){mark('step-web','STEP 1 · Web Search',detail||'Searching multiple websites independently of the model.','running');return;}
+            if(stage==='searching'){mark('step-web','STEP 1 · Web Search','Searching multiple sources across the web.','running');return;}
+            if(stage==='web-reading'){mark('step-web','STEP 1 · Reading Websites',detail||'Opening and extracting readable webpage content.','running');return;}
+            if(stage==='web-search-done'){mark('step-web','STEP 1 · Web Search Complete',detail||'First-pass web research is complete.','done');return;}
+            if(stage==='web-search-error'){mark('step-web','STEP 1 · Web Search',detail||'First search pass was unavailable.','error');return;}
+            if(stage==='model'){mark('step-ai','STEP 2 · AI Thinking',detail||'Loading the local model after web research.','running');return;}
+            if(stage==='model-thinking'){mark('step-ai','STEP 2 · AI Thinking',detail||activeModelName+' is preparing its independent research.','running');return;}
             if(stage==='second-searching'){mark('step-second-search','KAI model · Independent second search',detail||'The loaded model is searching the web again.','running');return;}
             if(stage==='second-search-error'){mark('step-ai','STEP 2 · AI Model Thinking','The model is continuing with the readable first-pass evidence.','done');mark('step-second-search','KAI model · Independent second search',detail||'Second search could not complete; checking first-pass evidence.','error');return;}
             if(stage==='second-reading'){mark('step-ai','STEP 2 · AI Model Thinking','The model has completed its own search query.','done');mark('step-second-search','KAI model · Independent second search',detail||'Second-pass pages retrieved.','done');mark('step-reading','Reading and comparing webpages',detail||'Evaluating the collected source material.','running');return;}
@@ -306,9 +306,8 @@ if(input)input.value='';resize();try{if(!overdrive){
               composing:activeModelName+' is writing the response'
             };
             const keys={searching:'searching',analyzing:'analyzing',composing:'composing'};
-            if(stage==='searching')kaiActivitySet('thinking','done');
-            if(stage==='analyzing')kaiActivitySet('searching','done');
-            if(stage==='composing'){kaiActivitySet('analyzing','done');kaiActivitySet('step-summary','done',detail||'The local model completed its summary.');}
+            if(stage==='analyzing'){mark('step-reading','STEP 2 · AI Reading',detail||'The local model is evaluating retrieved evidence.','running');return;}
+            if(stage==='composing'){mark('step-summary','STEP 2 · AI Summary',detail||'The local model completed its summary.','done');}
             mark(keys[stage]||'router',labels[stage]||activeModelName,detail||'Processing this stage','running');
           }
         });

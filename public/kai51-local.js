@@ -181,7 +181,7 @@
       hooks.onSources?.(sources.map(({title,url,source,readStatus})=>({title,url,source,readStatus})));
       const evidence = sources.map((s,i) => "[SOURCE " + (i+1) + "] " + s.source + " — " + s.title +
         (s.url ? " — " + s.url : "") + " [" + s.readStatus + "]\n" + s.text).join("\n\n").slice(0,8200);
-      hooks.onStage?.("analyzing",MODEL + " is evaluating " + sources.length + " retrieved source(s)");
+      hooks.onStage?.("web-reading","First-pass web search returned "+sources.length+" source(s); collecting readable page text.");
       return {
         sources,
         engine:data.engine || "Web search",
@@ -441,23 +441,9 @@
     status:()=>({ready:!!engine?.isReady?.(),modelCount:1,model:MODEL,running:!!enginePromise})
   };
   window.addEventListener("haxbro:username-changed",()=>{state=readState();});
-  // Install/initialize the local model automatically whenever the app opens.
-  // Transformers.js reuses its persistent browser cache, so reloads initialize
-  // the runtime from cached weights instead of intentionally fetching them anew.
-  window.HAxBROKai51AutoInstall = true;
-  const startInstallOnOpen = () => {
-    if (document.visibilityState === "hidden") return;
-    loadEngine().catch(error => console.warn("KAI local model initialization failed",error));
-  };
-  if (document.readyState === "complete") {
-    if ("requestIdleCallback" in window) window.requestIdleCallback(startInstallOnOpen,{timeout:1200});
-    else setTimeout(startInstallOnOpen,250);
-  } else {
-    window.addEventListener("load",startInstallOnOpen,{once:true});
-  }
-  document.addEventListener("visibilitychange",() => {
-    if (document.visibilityState === "visible" && !engine?.isReady?.() && !enginePromise) {
-      startInstallOnOpen();
-    }
-  });
+  // Do NOT initialize or download the local model when the website opens.
+  // The public workspace must render immediately. For research turns, the
+  // independent web-search pass completes first; only then does unifiedGenerate
+  // initialize KAI and start its model-directed second search.
+  window.HAxBROKai51AutoInstall = false;
 })();
