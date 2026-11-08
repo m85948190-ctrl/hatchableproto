@@ -169,6 +169,7 @@
         method:"POST",
         headers:{"Content-Type":"application/json","Accept":"application/json"},
         signal:controller.signal,
+        priority:"high",
         body:JSON.stringify({query,mode:hooks.searchMode === "deep" ? "deep" : "fast"})
       });
       const data = await response.json().catch(() => ({}));
@@ -467,9 +468,30 @@
     status:()=>({ready:!!engine?.isReady?.(),modelCount:1,model:MODEL,running:!!enginePromise})
   };
   window.addEventListener("haxbro:username-changed",()=>{state=readState();});
-  // Do NOT initialize or download the local model when the website opens.
-  // The public workspace must render immediately. For research turns, the
-  // independent web-search pass completes first; only then does unifiedGenerate
-  // initialize KAI and start its model-directed second search.
-  window.HAxBROKai51AutoInstall = false;
+  // Begin the device's one-time model preparation after the app has rendered.
+  // This is background preparation only: it does not create a chat activity row
+  // or run inference. On a research turn, unifiedGenerate still starts and awaits
+  // the high-priority first web search before it waits for this engine.
+  window.HAxBROKai51AutoInstall = true;
+  const startBackgroundInstall = () => {
+    const begin = () => {
+      if (document.visibilityState === "hidden") {
+        const onVisible = () => {
+          if (document.visibilityState !== "visible") return;
+          document.removeEventListener("visibilitychange",onVisible);
+          loadEngine().catch(error=>console.warn("HAxBRO background KAI preparation failed:",error));
+        };
+        document.addEventListener("visibilitychange",onVisible);
+        return;
+      }
+      loadEngine().catch(error=>console.warn("HAxBRO background KAI preparation failed:",error));
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(begin,{timeout:2200});
+    } else {
+      window.setTimeout(begin,1400);
+    }
+  };
+  if (document.readyState === "complete") startBackgroundInstall();
+  else window.addEventListener("load",startBackgroundInstall,{once:true});
 })();
