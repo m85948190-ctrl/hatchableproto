@@ -287,6 +287,17 @@ if(input)input.value='';resize();try{if(!overdrive){
           onSources:sources=>kaiActivityResearch(sources),
           signal:activeChatController?.signal,
           onStage:(stage,detail)=>{
+            // Keep the two user-visible phases separate. Step 1 is independent
+            // retrieval; Step 2 begins only when the local neural model is ready.
+            if(stage==='web-search'){mark('step-web','STEP 1 · Independent Web Search',detail||'Searching multiple sources before model synthesis.','running');return;}
+            if(stage==='web-search-done'){mark('step-web','STEP 1 · Independent Web Search',detail||'First-pass research collected.','done');return;}
+            if(stage==='web-search-error'){mark('step-web','STEP 1 · Independent Web Search',detail||'First search pass was unavailable.','error');return;}
+            if(stage==='model-thinking'){mark('step-ai','STEP 2 · AI Model Thinking',detail||activeModelName+' is preparing its independent research.','running');return;}
+            if(stage==='second-searching'){mark('step-second-search','KAI model · Independent second search',detail||'The loaded model is searching the web again.','running');return;}
+            if(stage==='second-search-error'){mark('step-ai','STEP 2 · AI Model Thinking','The model is continuing with the readable first-pass evidence.','done');mark('step-second-search','KAI model · Independent second search',detail||'Second search could not complete; checking first-pass evidence.','error');return;}
+            if(stage==='second-reading'){mark('step-ai','STEP 2 · AI Model Thinking','The model has completed its own search query.','done');mark('step-second-search','KAI model · Independent second search',detail||'Second-pass pages retrieved.','done');mark('step-reading','Reading and comparing webpages',detail||'Evaluating the collected source material.','running');return;}
+            if(stage==='ai-reading'){mark('step-ai','STEP 2 · AI Model Thinking','Local model is reading, comparing and reasoning over the sources.','done');mark('step-reading','Reading and comparing webpages',detail||'Evidence review complete.','done');mark('step-summary','AI model · Generating summary',detail||'Reasoning over both research passes.','running');return;}
+            if(stage==='query-plan-fallback'){mark('step-ai','STEP 2 · AI Model Thinking',detail||'Using the original question for the second search.','running');return;}
             const labels={
               model:'Loading '+activeModelName+' locally',
               thinking:activeModelName+' is understanding the request',
@@ -297,7 +308,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             const keys={searching:'searching',analyzing:'analyzing',composing:'composing'};
             if(stage==='searching')kaiActivitySet('thinking','done');
             if(stage==='analyzing')kaiActivitySet('searching','done');
-            if(stage==='composing')kaiActivitySet('analyzing','done');
+            if(stage==='composing'){kaiActivitySet('analyzing','done');kaiActivitySet('step-summary','done',detail||'The local model completed its summary.');}
             mark(keys[stage]||'router',labels[stage]||activeModelName,detail||'Processing this stage','running');
           }
         });

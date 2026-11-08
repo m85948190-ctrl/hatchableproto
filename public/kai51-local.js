@@ -240,18 +240,21 @@
     let utility = null;
     let research = null;
 
-    // Do web I/O BEFORE initializing the 0.6B local model. Search must never
-    // wait for a multi-gigabyte model download or a GPU capability check.
+    // STEP 1: independent web research starts before this turn initializes or waits
+    // for the local model. The site may already be downloading the model in the
+    // background, but this request's first awaited operation is web retrieval.
+    let firstSearchError = null;
     if (wantsWeb) {
+      hooks.onStage?.("web-search","STEP 1 · Independent web search is running without waiting for KAI's model.");
       try {
         research = explicitBrowse
           ? await browseWeb(requestedUrl,hooks)
           : await searchWeb(text,hooks);
+        hooks.onStage?.("web-search-done",(research.sources||[]).length+" source(s) collected in the first research pass.");
       } catch (error) {
         if (hooks.signal?.aborted) throw error;
-        // Search is a required first stage for research questions. Do not continue
-        // into model synthesis when the search returned no verified source set.
-        throw new Error("Web search must complete before KAI can summarize. "+String(error?.message||error));
+        firstSearchError = String(error?.message||error);
+        hooks.onStage?.("web-search-error","First search pass did not return a verified source set: "+firstSearchError);
       }
     } else {
       utility = await getLocalUtility(text,history,hooks);
@@ -299,14 +302,66 @@
       return {...generated,lane:IS_PHONE ? "phone" : "qwen",model:MODEL,local:true,localModel:true,research:!!utility.research,sources:utility.sources||[],searchEngines:utility.searchEngines||[],combined:true,knowledgeUsed:(utility.sources||[]).some(source=>source?.source==="HAxBRO Knowledge")};
     }
 
-    if (research) {
-      hooks.onStage?.("analyzing",MODEL + " is analysing "+(research.sources||[]).length+" retrieved source(s)");
-      const final = await neural.generate(buildPrompt(text,history,research.evidence),history,{
-        signal:hooks.signal,maxTokens:IS_PHONE?240:420,temperature:0.35,topP:0.9
+    if (wantsWeb) {
+      // STEP 2: after the local model is ready, it interprets the question and
+      // first-pass source titles, creates a fresh query, and triggers its own search.
+      hooks.onStage?.("model-thinking","STEP 2 · "+MODEL+" is thinking over the question and first-pass research.");
+      const firstTitles=(research?.sources||[]).slice(0,8).map((s,i)=>(i+1)+". "+String(s.title||"Source")).join("\n");
+      let secondQuery=text;
+      try {
+        const queryPlan=await neural.generate(
+          "You are the web-research query planner inside KAI 51. Based on the user's question and these first-pass source titles, create ONE improved, independent web-search query that finds additional authoritative and relevant pages. Do not answer the question. Return only the search query, with no explanation or quotation marks.\n\nUSER QUESTION:\n"+text+"\n\nFIRST-PASS SOURCES:\n"+(firstTitles||"(No first-pass sources were available.)"),
+          history,{signal:hooks.signal,maxTokens:72,temperature:0.1,topP:0.85}
+        );
+        const candidate=String(queryPlan?.response||"").replace(/^\s*(?:search query|query)\s*:\s*/i,"").split(/\r?\n/)[0].replace(/^["']+|["']+$/g,"").trim();
+        if(candidate.length>=4&&candidate.length<=240)secondQuery=candidate;
+      } catch(error) {
+        if(hooks.signal?.aborted)throw error;
+        hooks.onStage?.("query-plan-fallback","Using the original question for the independent second search.");
+      }
+
+      hooks.onStage?.("second-searching","The loaded local model is launching its own independent search: "+secondQuery);
+      let secondResearch=null,secondSearchError=null;
+      try {
+        secondResearch=await searchWeb(secondQuery,{
+          ...hooks,
+          onSources:()=>{},
+          onStage:(stage,detail)=>{
+            if(stage==="searching")hooks.onStage?.("second-searching",detail||"KAI model's second web search is running.");
+            else if(stage==="analyzing")hooks.onStage?.("second-reading",detail||"Reading the second-pass webpages.");
+            else hooks.onStage?.(stage,detail);
+          }
+        });
+      } catch(error) {
+        if(hooks.signal?.aborted)throw error;
+        secondSearchError=String(error?.message||error);
+        hooks.onStage?.("second-search-error","The model's independent second search could not complete: "+secondSearchError);
+      }
+
+      const allSources=[...(research?.sources||[]),...(secondResearch?.sources||[])];
+      const seenSources=new Set();
+      const uniqueSources=allSources.filter(source=>{
+        const key=String(source?.url||source?.title||"");
+        if(!key||seenSources.has(key))return false;
+        seenSources.add(key);return true;
+      }).slice(0,14);
+      if(uniqueSources.length<3) {
+        throw new Error("The two independent web-search passes did not return at least 3 distinct readable sources. "+[firstSearchError,secondSearchError].filter(Boolean).join(" · "));
+      }
+
+      const evidence=[
+        research?.evidence?"FIRST INDEPENDENT SEARCH PASS:\n"+research.evidence:"",
+        secondResearch?.evidence?"KAI MODEL'S SECOND INDEPENDENT SEARCH PASS (query: "+secondQuery+"):\n"+secondResearch.evidence:""
+      ].filter(Boolean).join("\n\n").slice(0,12000);
+      const engines=[research?.engine,secondResearch?.engine].filter(Boolean);
+      hooks.onSources?.(uniqueSources.map(({title,url,source,readStatus})=>({title,url,source,readStatus})));
+      hooks.onStage?.("ai-reading",MODEL+" is reading and comparing "+uniqueSources.length+" distinct webpages before writing the summary.");
+      const final=await neural.generate(buildPrompt(text,history,evidence),history,{
+        signal:hooks.signal,maxTokens:IS_PHONE?240:520,temperature:0.35,topP:0.9
       });
-      if (!final?.response) throw new Error(MODEL + " returned an empty research answer.");
-      hooks.onStage?.("composing",MODEL + " completed the source-based answer");
-      return {...final,lane:IS_PHONE ? "phone" : "qwen",provider:final.provider || MODEL + " · local on-device inference",model:MODEL,local:true,localModel:true,research:true,sources:research.sources||[],searchEngines:[research.engine||"Web search"],combined:true};
+      if(!final?.response)throw new Error(MODEL+" returned an empty research answer.");
+      hooks.onStage?.("composing",MODEL+" completed the two-pass source-based summary.");
+      return {...final,lane:IS_PHONE?"phone":"qwen",provider:final.provider||MODEL+" · local on-device inference",model:MODEL,local:true,localModel:true,research:true,sources:uniqueSources,searchEngines:engines,combined:true,researchPasses:2,secondSearchQuery:secondQuery,searchErrors:[firstSearchError,secondSearchError].filter(Boolean)};
     }
 
     hooks.onStage?.("thinking",MODEL + " is preparing a direct answer");
