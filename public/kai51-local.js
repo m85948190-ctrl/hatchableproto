@@ -196,6 +196,42 @@
       hooks.signal?.removeEventListener?.("abort",abort);
     }
   }
+  async function searchWebDiscovery(query,hooks={}) {
+    ensureActive(hooks.signal);
+    hooks.onStage?.("searching","The standalone HAxBRO Web Search tool is finding real websites.");
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),hooks.searchMode==="deep"?30000:18000);
+    const abort=()=>controller.abort();
+    hooks.signal?.addEventListener?.("abort",abort,{once:true});
+    try {
+      const response=await fetch("/api/web-search",{
+        method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},
+        signal:controller.signal,priority:"high",
+        body:JSON.stringify({query,mode:hooks.searchMode==="deep"?"deep":"fast"})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok||!data?.ok)throw new Error(data?.error||"Standalone web search returned HTTP "+response.status);
+      const rows=Array.isArray(data.results)?data.results:(Array.isArray(data.sources)?data.sources:[]);
+      const sources=rows.filter(x=>x&&x.url&&x.title).slice(0,12).map(x=>({
+        title:String(x.title||"Web page").slice(0,240),
+        url:String(x.url||"").slice(0,1200),
+        text:String(x.snippet||x.text||"").slice(0,1800),
+        source:String(x.provider||data.provider||"Bing Web").slice(0,100),
+        readStatus:"search-result",
+        publishedAt:x.publishedAt||null
+      }));
+      if(!sources.length)throw new Error("The web-search backend returned zero website results.");
+      hooks.onSources?.(sources.map(({title,url,source,readStatus})=>({title,url,source,readStatus})));
+      const evidence=sources.map((s,i)=>"[SOURCE "+(i+1)+"] "+s.source+" — "+s.title+
+        (s.url?" — "+s.url:"")+(s.publishedAt?" — published "+s.publishedAt:"")+" [search snippet; page not yet read]\n"+s.text
+      ).join("\n\n").slice(0,10000);
+      hooks.onStage?.("web-search-done",sources.length+" real website result(s) returned by "+(data.provider||"the web-search tool")+".");
+      return {sources,engine:data.provider||"Bing Web",engines:data.providers||{},evidence:evidence||"Search returned no snippets; do not invent evidence."};
+    } finally {
+      clearTimeout(timer);
+      hooks.signal?.removeEventListener?.("abort",abort);
+    }
+  }
   async function browseWeb(url,hooks={}) {
     ensureActive(hooks.signal);
     hooks.onStage?.("searching","Opening the requested public webpage in the read-only browser");
@@ -252,7 +288,7 @@
       try {
         research = explicitBrowse
           ? await browseWeb(requestedUrl,hooks)
-          : await searchWeb(text,hooks);
+          : await searchWebDiscovery(text,hooks);
         hooks.onStage?.("web-search-done",(research.sources||[]).length+" source(s) collected in the first research pass.");
       } catch (error) {
         if (hooks.signal?.aborted) throw error;
