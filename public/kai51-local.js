@@ -450,7 +450,7 @@
   }
   // Standalone web-search tool; it does not wait for or initialize the local model.
   window.HAxBROWebSearchTool = Object.freeze({
-    version:"1.0.0",endpoint:"/api/kai/search",
+    version:"1.1.0",endpoint:"/api/web-search",
     async search(query,options={}) {
       const q=String(query||"").trim();
       if(!q) throw new Error("A web-search query is required.");
@@ -461,10 +461,10 @@
       const abort=()=>controller.abort();
       externalSignal?.addEventListener?.("abort",abort,{once:true});
       try {
-        const response=await fetch("/api/kai/search",{
+        const response=await fetch("/api/web-search",{
           method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},
           signal:controller.signal,priority:"high",
-          body:JSON.stringify({query:q,mode:options.mode==="deep"?"deep":"fast"})
+          body:JSON.stringify({query:q,mode:options.mode==="deep"?"deep":"fast",type:options.type==="news"?"news":"web"})
         });
         const data=await response.json().catch(()=>({}));
         if(!response.ok||!data?.ok) throw new Error(data?.error||"Web search failed with HTTP "+response.status);
@@ -478,10 +478,10 @@
           title:String(item.title||"Untitled website").slice(0,240),
           url:String(item.url).slice(0,1200),
           snippet:String(item.text||item.snippet||"").slice(0,9000),
-          engine:String(item.engine||item.source||"Web search"),
+          engine:String(item.provider||item.engine||item.source||"Web search"),
           readStatus:String(item.readStatus||"search-result")
         }));
-        return {ok:true,query:q,engine:data.engine||"Web search",engines:data.engines||{},count:results.length,results};
+        return {ok:true,query:q,engine:data.provider||data.engine||"Web search",engines:data.providers||data.engines||{},count:results.length,results};
       } finally {
         clearTimeout(timer);externalSignal?.removeEventListener?.("abort",abort);
       }
