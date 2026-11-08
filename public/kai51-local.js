@@ -149,8 +149,10 @@
       return engine;
     })().catch(error => {
       engine = null;
-      writeState({status:"error",installed:false,verified:false,error:String(error?.message || error).slice(0,800)});
-      emit({progress:99,status:MODEL + " failed to initialize",error:String(error?.message || error)});
+      const message=String(error?.message || error).slice(0,800);
+      writeState({status:"error",installed:false,verified:false,error:message});
+      emit({progress:99,status:MODEL + " failed to initialize",error:message});
+      hooks.onStage?.("model-error",MODEL+" failed to load after the first web search: "+message);
       throw error;
     }).finally(() => { enginePromise = null; });
     return enginePromise;
@@ -335,7 +337,31 @@
       } catch(error) {
         if(hooks.signal?.aborted)throw error;
         secondSearchError=String(error?.message||error);
-        hooks.onStage?.("second-search-error","The model's independent second search could not complete: "+secondSearchError);
+      }
+      // If the model's refined query returned nothing, retry its independent
+      // search once with the original user question before giving up.
+      if(!secondResearch?.sources?.length && secondQuery!==text) {
+        secondQuery=text;
+        hooks.onStage?.("second-searching","The refined query returned no readable pages; retrying the model's independent search with the original question.");
+        try {
+          secondResearch=await searchWeb(secondQuery,{
+            ...hooks,
+            onSources:()=>{},
+            onStage:(stage,detail)=>{
+              if(stage==="searching")hooks.onStage?.("second-searching",detail||"KAI model's retry search is running.");
+              else if(stage==="web-reading")hooks.onStage?.("second-reading",detail||"Reading pages from the retry search.");
+              else hooks.onStage?.(stage,detail);
+            }
+          });
+          secondSearchError=null;
+        } catch(error) {
+          if(hooks.signal?.aborted)throw error;
+          secondSearchError=String(error?.message||error);
+        }
+      }
+      if(!secondResearch?.sources?.length) {
+        secondSearchError=secondSearchError||"The model's second search returned no readable sources.";
+        hooks.onStage?.("second-search-error","The model's independent second search could not retrieve readable pages: "+secondSearchError);
       }
 
       const allSources=[...(research?.sources||[]),...(secondResearch?.sources||[])];
@@ -361,7 +387,7 @@
       });
       if(!final?.response)throw new Error(MODEL+" returned an empty research answer.");
       hooks.onStage?.("composing",MODEL+" completed the two-pass source-based summary.");
-      return {...final,lane:IS_PHONE?"phone":"qwen",provider:final.provider||MODEL+" · local on-device inference",model:MODEL,local:true,localModel:true,research:true,sources:uniqueSources,searchEngines:engines,combined:true,researchPasses:2,secondSearchQuery:secondQuery,searchErrors:[firstSearchError,secondSearchError].filter(Boolean)};
+      return {...final,lane:IS_PHONE?"phone":"qwen",provider:final.provider||MODEL+" · local on-device inference",model:MODEL,local:true,localModel:true,research:true,sources:uniqueSources,searchEngines:engines,combined:true,researchPasses:secondResearch?.sources?.length?2:1,secondSearchCompleted:!!secondResearch?.sources?.length,secondSearchQuery:secondQuery,searchErrors:[firstSearchError,secondSearchError].filter(Boolean)};
     }
 
     hooks.onStage?.("thinking",MODEL + " is preparing a direct answer");

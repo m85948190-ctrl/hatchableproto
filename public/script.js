@@ -293,6 +293,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             if(stage==='web-search-error'){mark('step-web','STEP 1 · Web Search',detail||'First search pass was unavailable.','error');return;}
             if(stage==='model'){mark('step-ai','STEP 2 · AI Thinking',detail||'Loading the local model after web research.','running');return;}
             if(stage==='model-thinking'){mark('step-ai','STEP 2 · AI Thinking',detail||activeModelName+' is preparing its independent research.','running');return;}
+            if(stage==='model-error'){mark('step-ai','STEP 2 · AI Model Failed to Load',detail||'The local model could not initialize after web research.','error');return;}
             if(stage==='second-searching'){mark('step-second-search','KAI model · Independent second search',detail||'The loaded model is searching the web again.','running');return;}
             if(stage==='second-search-error'){mark('step-ai','STEP 2 · AI Model Thinking','The model is continuing with the readable first-pass evidence.','done');mark('step-second-search','KAI model · Independent second search',detail||'Second search could not complete; checking first-pass evidence.','error');return;}
             if(stage==='second-reading'){mark('step-ai','STEP 2 · AI Model Thinking','The model has completed its own search query.','done');mark('step-second-search','KAI model · Independent second search',detail||'Second-pass pages retrieved.','done');mark('step-reading','Reading and comparing webpages',detail||'Evaluating the collected source material.','running');return;}
