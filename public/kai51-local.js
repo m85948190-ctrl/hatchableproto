@@ -331,7 +331,7 @@
           onSources:()=>{},
           onStage:(stage,detail)=>{
             if(stage==="searching")hooks.onStage?.("second-searching",detail||"KAI model's second web search is running.");
-            else if(stage==="analyzing")hooks.onStage?.("second-reading",detail||"Reading the second-pass webpages.");
+            else if(stage==="web-reading"||stage==="analyzing")hooks.onStage?.("second-reading",detail||"Reading the second-pass webpages.");
             else hooks.onStage?.(stage,detail);
           }
         });
@@ -350,7 +350,7 @@
             onSources:()=>{},
             onStage:(stage,detail)=>{
               if(stage==="searching")hooks.onStage?.("second-searching",detail||"KAI model's retry search is running.");
-              else if(stage==="web-reading")hooks.onStage?.("second-reading",detail||"Reading pages from the retry search.");
+              else if(stage==="web-reading"||stage==="analyzing")hooks.onStage?.("second-reading",detail||"Reading pages from the retry search.");
               else hooks.onStage?.(stage,detail);
             }
           });
@@ -372,8 +372,11 @@
         if(!key||seenSources.has(key))return false;
         seenSources.add(key);return true;
       }).slice(0,14);
+      if(!uniqueSources.length) {
+        throw new Error("Web research returned zero readable sources across both search passes. "+[firstSearchError,secondSearchError].filter(Boolean).join(" · "));
+      }
       if(uniqueSources.length<3) {
-        throw new Error("The two independent web-search passes did not return at least 3 distinct readable sources. "+[firstSearchError,secondSearchError].filter(Boolean).join(" · "));
+        hooks.onStage?.("research-limited","Only "+uniqueSources.length+" distinct readable source(s) were available. KAI will still synthesize them and clearly limit its claims.");
       }
 
       const evidence=[

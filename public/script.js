@@ -158,7 +158,7 @@ function kaiActivityFinish(data){
  const bubble=thinkingBubble;
  const token=thinkingSeq;
  if(thinkingTimer){clearInterval(thinkingTimer);thinkingTimer=null}
- kaiActivityResearch(data?.webSteps||data?.sources||[]);
+ if(Array.isArray(data?.webSteps)&&data.webSteps.length)kaiActivityResearch(data.webSteps);
  const elapsedMs=Date.now()-thinkingStartedAt;
  const elapsed=Math.floor(elapsedMs/1000);
  const clock=bubble.querySelector('.kai-activity-time');if(clock)clock.textContent=elapsed+'s';
@@ -274,6 +274,7 @@ if(input)input.value='';resize();try{if(!overdrive){
       };
       const finish=payload=>{try{kaiActivityFinish(payload||{});}catch{}};
       const activeModelName=window.HAxBROKai51Bootstrap?.state?.()?.model||((window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android")?"SmolLM2 135M Instruct":"Qwen3-0.6B-Instruct");
+      let firstSearchCardShown=false;
       try{
         if(activeChatController?.signal.aborted||sendAttemptId!==attemptId)return true;
         let workspaceHandled=false;
@@ -281,7 +282,13 @@ if(input)input.value='';resize();try{if(!overdrive){
         if(workspaceHandled){kaiActivitySet('router','done','The matching HAxBRO workspace tool was opened and received your request.');finish({sources:[],local:true,workspaceTool:true,model:activeModelName});return true;}
         const result=await window.HAxBROKai51Bootstrap?.unifiedGenerate?.(value,history,{
           searchMode:opts.searchMode||'normal',
-          onSources:sources=>kaiActivityResearch(sources),
+          onSources:sources=>{
+            if(firstSearchCardShown||!Array.isArray(sources)||!sources.length)return;
+            firstSearchCardShown=true;
+            addMessage("Web search results are ready. KAI is reviewing these sources before its independent second search.",'bot',true,sources,{attempted:true,engines:[...new Set(sources.map(s=>s?.source).filter(Boolean))]});
+            const resultCard=messages?.lastElementChild;
+            if(thinkingBubble&&resultCard&&resultCard!==thinkingBubble)messages.insertBefore(resultCard,thinkingBubble);
+          },
           signal:activeChatController?.signal,
           onStage:(stage,detail)=>{
             // Keep the two user-visible phases separate. Step 1 is independent
@@ -299,6 +306,7 @@ if(input)input.value='';resize();try{if(!overdrive){
             if(stage==='second-reading'){mark('step-ai','STEP 2 · AI Model Thinking','The model has completed its own search query.','done');mark('step-second-search','KAI model · Independent second search',detail||'Second-pass pages retrieved.','done');mark('step-reading','Reading and comparing webpages',detail||'Evaluating the collected source material.','running');return;}
             if(stage==='ai-reading'){mark('step-ai','STEP 2 · AI Model Thinking','Local model is reading, comparing and reasoning over the sources.','done');mark('step-reading','Reading and comparing webpages',detail||'Evidence review complete.','done');mark('step-summary','AI model · Generating summary',detail||'Reasoning over both research passes.','running');return;}
             if(stage==='query-plan-fallback'){mark('step-ai','STEP 2 · AI Model Thinking',detail||'Using the original question for the second search.','running');return;}
+            if(stage==='research-limited'){mark('step-second-search','KAI model · Independent second search',detail||'Research was limited; the model will disclose this.','error');return;}
             const labels={
               model:'Loading '+activeModelName+' locally',
               thinking:activeModelName+' is understanding the request',
