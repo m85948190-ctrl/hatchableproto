@@ -249,10 +249,9 @@
           : await searchWeb(text,hooks);
       } catch (error) {
         if (hooks.signal?.aborted) throw error;
-        research = {
-          sources:[],engine:"Web retrieval unavailable",engines:{},
-          evidence:"The web retrieval service failed: "+String(error?.message||error)+". Do not invent current facts or sources."
-        };
+        // Search is a required first stage for research questions. Do not continue
+        // into model synthesis when the search returned no verified source set.
+        throw new Error("Web search must complete before KAI can summarize. "+String(error?.message||error));
       }
     } else {
       utility = await getLocalUtility(text,history,hooks);

@@ -136,7 +136,9 @@ async function googleNewsSearch(query){
 
 async function multiSearch(query,mode="fast"){
   const variants=queryVariants(query);
-  const primary=variants.slice(0,mode==="deep"?3:1);
+  // Always fan out across several query variants, even in quick mode, so a
+  // single weak result page cannot leave the user with an empty source panel.
+  const primary=variants.slice(0,Math.max(3,mode==="deep"?3:1));
   // Run independent web providers and a separate Google News RSS lane. Search
   // remains useful even when Google/Bing HTML pages block automated requests.
   // Give each provider its own deadline so one slow engine cannot erase
@@ -164,7 +166,7 @@ async function multiSearch(query,mode="fast"){
     const matches=keyTerms.filter(term=>text.includes(term)).length;
     // For long, specific queries allow one strong topic match; the provider's
     // ranking already narrows candidates and a hard 3-term gate hid good pages.
-    const required=keyTerms.length>=10?2:keyTerms.length>=5?1:keyTerms.length>=3?2:1;
+    const required=keyTerms.length>=10?2:1;
     return matches>=required;
   });
   const google=filterRelevant(collect(googleResults,"Google Web",6));
@@ -266,7 +268,7 @@ export default async function(req,res){
       wikipediaEvidence(query)
     ]);
     const links=searched.links||[];
-    const take=mode==="deep"?8:6;
+    const take=8;
     // Open actual result pages, not just search snippets. Keep the snippet only
     // as a clearly marked fallback when a publisher page is unavailable.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
@@ -275,7 +277,7 @@ export default async function(req,res){
         const timeout=mode==="deep"?8500:6500;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
-        const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden|wikimedia error|too many requests|error 429|http 429|rate limit|complete the following challenge|select all squares|human verification|protection\. privacy|donor privacy policy|please donate|support wikipedia|wikipedia.{0,80}donat|donat.{0,80}wikipedia/i.test(text);
+        const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden|wikimedia error|too many requests|error 429|http 429|rate limit|complete the following challenge|select all squares|human verification|protection\. privacy|donor privacy policy|please donate|support wikipedia|wikipedia.{0,100}(?:donat|fundrais)|(?:donat|fundrais).{0,100}wikipedia/i.test(text);
         if(text.length>180&&!blocked)return {...x,text:text.slice(0,9000),readStatus:"page-read"};
         return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
       }catch{return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
@@ -283,6 +285,10 @@ export default async function(req,res){
     const combined=[...pages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>x.text||x.title);
     const seen=new Set();
     const sources=combined.filter(x=>{const key=x.url||x.title;if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,take+2);
+    // Never report a successful research run with an empty or one-page source set.
+    // If the providers cannot supply at least three distinct sources, stop before
+    // the local model runs so it cannot disguise a failed search as researched AI.
+    if(sources.length<3)return res.status(503).json({ok:false,error:"Web search returned fewer than 3 distinct readable sources. Please retry; no AI summary was generated.",sourceCount:sources.length,engines:searched.engines||{}});
     return res.json({ok:true,engine:[searched.engine,wiki.length?"Wikipedia":""].filter(Boolean).join(" + "),engines:searched.engines||{},mode,query,searchQueries:queryVariants(query),sources});
   }catch(e){
     return res.status(502).json({ok:false,error:"KAI web search unavailable",detail:clean(e?.message,300)});
