@@ -42,16 +42,14 @@ async function googleSearch(query){
 function queryVariants(query){
   const q=clean(query,700).trim();
   if(!q)return [];
-  const short=/^[a-z0-9][a-z0-9._-]{1,40}$/i.test(q);
-  if(!short)return [q];
-  return [
-    `"${q}" meaning`,
-    `"${q}" definition`,
-    `"${q}" slang`,
-    `"${q}" abbreviation`,
-    `"${q}" typo`,
-    `"${q}"`
-  ];
+  const stop=new Set(["what","when","where","which","why","who","how","is","are","was","were","the","a","an","and","or","for","to","of","in","on","at","by","with","from","about","please","tell","me","explain","define","describe","show","give","can","could","would","should","does","do","did","search","web","sources","latest","current","today","recent","information","info"]);
+  const tokens=q.match(/[\\p{L}\\p{N}][\\p{L}\\p{N}.'+-]*/gu)||[];
+  const core=tokens.filter(token=>!stop.has(token.toLowerCase()));
+  const concise=core.join(" ").trim();
+  const compact=core.slice(0,5).join(" ").trim();
+  const variants=[q,concise,compact].filter(Boolean);
+  if(/^[a-z0-9][a-z0-9._-]{1,40}$/i.test(q))variants.push(`"${q}" meaning`,`"${q}" definition`);
+  return [...new Set(variants.map(item=>item.trim()))].slice(0,3);
 }
 
 function decodeBingTarget(href){
@@ -92,7 +90,7 @@ async function bingSearch(query){
   }
   // Bing sometimes serves a changed/JS-heavy HTML shell. Its RSS endpoint
   // provides the same public search results without relying on HTML classes.
-  if(!out.length){
+  if(out.length<6){
     const rssUrl="https://www.bing.com/search?format=rss&q="+encodeURIComponent(query);
     const rssResponse=await fetch(rssUrl,{headers:{accept:"application/rss+xml, application/xml, text/xml","user-agent":"Mozilla/5.0 (compatible; HAxBROResearch/1.0)"}});
     if(rssResponse.ok){
@@ -166,7 +164,7 @@ async function multiSearch(query,mode="fast"){
     const matches=keyTerms.filter(term=>text.includes(term)).length;
     // For long, specific queries allow one strong topic match; the provider's
     // ranking already narrows candidates and a hard 3-term gate hid good pages.
-    const required=keyTerms.length>=10?2:1;
+    const required=keyTerms.length>=7?3:keyTerms.length>=3?2:1;
     return matches>=required;
   });
   const google=filterRelevant(collect(googleResults,"Google Web",6));
