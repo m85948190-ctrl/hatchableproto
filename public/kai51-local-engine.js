@@ -31,12 +31,17 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
         };
         runtime = new Wllama(wasmPaths,{parallelDownloads:2,allowOffline:true});
         report(3,"Checking this device's saved Qwen2.5-Coder model cache");
+        const cores=Math.max(1,Number(globalThis.navigator?.hardwareConcurrency)||4);
         await runtime.loadModelFromUrl(MODEL_URL,{
+          n_ctx:2048,
+          n_batch:128,
+          n_threads:Math.max(1,Math.min(4,cores-1)),
+          useCache:true,
           progressCallback:p=>{
             const loaded=Number(p?.loaded)||0;
             const total=Number(p?.total)||0;
             const pct=total>0?Math.min(88,4+loaded/total*84):4;
-            report(pct,p?.status||"Downloading the shared Q4_K_M model");
+            report(pct,p?.status||"Restoring or downloading the shared Q4_K_M model");
           }
         });
         report(91,"Running the local Coder model self-test");
@@ -76,11 +81,13 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     let timer;
     try {
       const work=runtime.createChatCompletion(messages,{
-        nPredict:Math.min(700,Math.max(48,Number(options.maxTokens)||360)),
-        sampling:{temp:options.temperature??0.35,top_k:40,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08},
+        // This 0.5B WASM model is tuned for concise answers on CPU-only devices.
+        nPredict:Math.min(192,Math.max(48,Number(options.maxTokens)||128)),
+        sampling:{temp:options.temperature??0.35,top_k:32,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08},
+        useCache:true,
         abortSignal:options.signal
       });
-      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 120 seconds."));},120000);});
+      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 300 seconds. The local model did not finish within the device inference limit."));},300000);});
       const result=await Promise.race([work,timeout]);
       ensureActive(options.signal);
       const response=String(result||"").replace(/<\|im_end\|>|<\|im_start\|>assistant/gi,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
