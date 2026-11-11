@@ -55,7 +55,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
         lastError=String(error?.message||error).slice(0,700);
         try { await runtime?.exit?.(); } catch {}
         runtime=null; readyInfo=null;
-        report(99,"Qwen2.5-Coder initialization failed: "+lastError.slice(0,150));
+        report(0,"Qwen2.5-Coder initialization failed: "+lastError.slice(0,150));
         throw new Error(lastError);
       } finally { loading=null; }
     })();

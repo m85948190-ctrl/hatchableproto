@@ -152,7 +152,7 @@
       engine = null;
       const message=String(error?.message || error).slice(0,800);
       writeState({status:"error",installed:false,verified:false,error:message});
-      emit({progress:99,status:MODEL + " failed to initialize",error:message});
+      emit({progress:0,status:MODEL + " failed to initialize",error:message});
       hooks.onStage?.("model-error",MODEL+" failed to load after the first web search: "+message);
       throw error;
     }).finally(() => { enginePromise = null; });

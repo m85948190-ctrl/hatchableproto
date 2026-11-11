@@ -18,6 +18,13 @@
       const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· '+String(d.status||'QWEN2.5-CODER-7B INITIALIZING').toUpperCase();
       return;
     }
+    if(state.status==='error'||/failed|error/i.test(String(d.status||''))){
+      x.classList.remove('is-ready');
+      const p=x.querySelector('.hook-pct');if(p)p.textContent='!';
+      const lite=x.querySelector('.hook-lite');if(lite)lite.textContent='· MODEL ERROR · RETRY REQUIRED';
+      x.title=String(state.error||d.error||d.status||'Local model initialization failed');
+      return;
+    }
     if(state.status==='ready'&&state.installed&&state.verified){
       x.classList.add('is-ready');
       const p=x.querySelector('.hook-pct');if(p)p.textContent='100%';
@@ -32,8 +39,6 @@
       const stage=String(d.status||'').toLowerCase();
       if(d.profile==='local'){
         lite.textContent='· QWEN LOCAL ENGINE';
-      }else if(state.status==='error'||/failed|error/i.test(stage)){
-        lite.textContent='· MODEL ERROR';
       }else if(/download/i.test(stage)){
         lite.textContent='· '+modelName+' DOWNLOADING';
       }else if(state.status==='installing'){

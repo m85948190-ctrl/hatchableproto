@@ -1,7 +1,7 @@
 /* HAxBRO runtime hook: tiny, quiet, disappears after KAI 51 takeover. */
-#kai51RuntimeHook{position:fixed;right:18px;top:92px;z-index:5000;display:flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid rgba(38,191,232,.18);border-radius:999px;background:rgba(255,255,255,.72);backdrop-filter:blur(10px);box-shadow:0 5px 18px rgba(20,40,60,.06);font:700 9px/1 Inter,system-ui,sans-serif;color:#71818f;opacity:.82;transition:opacity .45s ease,transform .45s ease,filter .45s ease}
+#kai51RuntimeHook{position:fixed;right:18px;top:92px;z-index:5000;display:flex;align-items:center;gap:9px;padding:5px 9px;border:1px solid rgba(38,191,232,.18);border-radius:999px;background:rgba(255,255,255,.72);backdrop-filter:blur(10px);box-shadow:0 5px 18px rgba(20,40,60,.06);font:700 9px/1 Inter,system-ui,sans-serif;color:#71818f;opacity:.82;transition:opacity .45s ease,transform .45s ease,filter .45s ease}
 #kai51RuntimeHook .hook-lock{font-size:10px;opacity:.65}
-#kai51RuntimeHook .hook-name{letter-spacing:.08em}
+#kai51RuntimeHook .hook-name{letter-spacing:.08em;margin-right:3px}
 #kai51RuntimeHook .hook-pct{font-variant-numeric:tabular-nums;color:#4b677b}
 #kai51RuntimeHook .hook-lite{color:#87939d;font-weight:600}
 #kai51RuntimeHook.is-ready{opacity:0;transform:translateY(5px);pointer-events:none}
