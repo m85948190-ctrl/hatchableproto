@@ -569,30 +569,28 @@
     status:()=>({ready:!!engine?.isReady?.(),modelCount:1,model:MODEL,running:!!enginePromise})
   };
   window.addEventListener("haxbro:username-changed",()=>{state=readState();});
-  // Begin the device's one-time model preparation after the app has rendered.
-  // This is background preparation only: it does not create a chat activity row
-  // or run inference. On a research turn, unifiedGenerate still starts and awaits
-  // the high-priority first web search before it waits for this engine.
+  // Start the single shared model as soon as the app DOM is ready.
+  // Do not wait for window.load or requestIdleCallback: third-party scripts and
+  // background page work must not postpone the first model download/restore.
   window.HAxBROKai51AutoInstall = true;
+  let autoInstallStarted = false;
   const startBackgroundInstall = () => {
-    const begin = () => {
-      if (document.visibilityState === "hidden") {
-        const onVisible = () => {
-          if (document.visibilityState !== "visible") return;
-          document.removeEventListener("visibilitychange",onVisible);
-          loadEngine().catch(error=>console.warn("HAxBRO background KAI preparation failed:",error));
-        };
-        document.addEventListener("visibilitychange",onVisible);
-        return;
-      }
-      loadEngine().catch(error=>console.warn("HAxBRO background KAI preparation failed:",error));
-    };
-    if (typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(begin,{timeout:2200});
-    } else {
-      window.setTimeout(begin,1400);
+    if (autoInstallStarted) return;
+    autoInstallStarted = true;
+    if (document.visibilityState === "hidden") {
+      const onVisible = () => {
+        if (document.visibilityState !== "visible") return;
+        document.removeEventListener("visibilitychange",onVisible);
+        loadEngine().catch(error=>console.warn("HAxBRO background KAI preparation failed:",error));
+      };
+      document.addEventListener("visibilitychange",onVisible);
+      return;
     }
+    loadEngine().catch(error=>console.warn("HAxBRO background KAI preparation failed:",error));
   };
-  if (document.readyState === "complete") startBackgroundInstall();
-  else window.addEventListener("load",startBackgroundInstall,{once:true});
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded",startBackgroundInstall,{once:true});
+  } else {
+    window.setTimeout(startBackgroundInstall,0);
+  }
 })();

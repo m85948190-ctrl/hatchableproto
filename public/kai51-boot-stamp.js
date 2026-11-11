@@ -35,7 +35,7 @@
     el.setAttribute('aria-live','polite');
     el.innerHTML=`
       <div class="kai51-boot-kicker"><span class="kai51-boot-dot"></span><span>HAxBRO AI</span></div>
-      <div id="kai51BootTitle" class="kai51-boot-title">KAI 51 · QWEN3-0.6B IS LOADING</div>
+      <div id="kai51BootTitle" class="kai51-boot-title">KAI 51 · QWEN2.5-CODER IS LOADING</div>
       <div id="kai51BootText" class="kai51-boot-text"></div>
       <div class="kai51-boot-bar"><i id="kai51BootFill"></i></div>
       <div class="kai51-boot-meta"><b id="kai51BootPercent">0%</b><span id="kai51BootStatus">Preparing KAI 51</span></div>`;
@@ -52,25 +52,12 @@
 
   function render(d={}){
     const nativeState=window.HAxBROKai51Bootstrap?.state?.();
-    const phoneModel=window.HAxBRODeviceProfile?.isPhone===true||window.HAxBRO_DEVICE==="ios"||window.HAxBRO_DEVICE==="android";
+    // One shared local model is used on every device.
     const modelName=nativeState?.model||"Qwen2.5-Coder-0.5B-Instruct";
-    // READY is a durable installation state, not merely an in-memory runtime state.
-    if(nativeState?.installed && nativeState?.verified && nativeState?.status==='ready'){
-      hide();
-      return;
-    }
-
-    if(d.profile==='local'){
-      mount();
-      const title=document.getElementById('kai51BootTitle');
-      const body=document.getElementById('kai51BootText');
-      if(title) title.textContent='KAI 51 · LOCAL RETRIEVAL READY';
-      if(body) body.textContent='Your device-optimized KAI model downloads automatically when HAxBRO opens and runs locally on this device.';
-      document.getElementById('kai51BootFill').style.width='0%';
-      document.getElementById('kai51BootPercent').textContent='0%';
-      document.getElementById('kai51BootStatus').textContent='LOCAL retrieval ready · neural model not yet verified';
-      return;
-    }
+    // Hide only when this page has a live, verified in-memory model session.
+    // A saved "ready" marker means installed on disk, not loaded into this page.
+    const runtimeReady=!!(window.HAxBRO_KAI51_LOCAL_READY||window.HAxBROKai51Engine?.isReady?.());
+    if(runtimeReady){hide();return;}
     const incoming=Math.max(0,Math.min(99,Math.round(Number(d.progress)||0)));
     const current=Number(document.getElementById('kai51BootPercent')?.textContent?.replace('%',''))||0;
     const pct=Math.max(current,incoming);
@@ -78,21 +65,21 @@
 
     const title=document.getElementById('kai51BootTitle');
     const body=document.getElementById('kai51BootText');
-    if(title) title.textContent='KAI 51 · '+modelName.toUpperCase()+' IS LOADING';
-    if(body) body.textContent='The same Qwen2.5-Coder 0.5B Q4_K_M model downloads once to this device (about 398 MB / 379 MiB), runs locally through llama.cpp WebAssembly, and is reused from the browser model cache on later visits.';
-    document.getElementById('kai51BootFill').style.width=pct+'%';
-    document.getElementById('kai51BootPercent').textContent=pct+'%';
-    document.getElementById('kai51BootStatus').textContent=String(d.status||'Preparing KAI 51');
+    const failed=!!d.error||nativeState?.status==='error';
+    if(title) title.textContent=failed?'KAI 51 · MODEL INITIALIZATION FAILED':'KAI 51 · '+modelName.toUpperCase()+' IS LOADING';
+    if(body) body.textContent=failed?String(d.error||nativeState?.error||'The local model could not be initialized.').slice(0,260):'Restoring the same Qwen2.5-Coder 0.5B Q4_K_M model from this browser, or downloading it once if it is not cached. KAI runs locally on this device.';
+    document.getElementById('kai51BootFill').style.width=(failed?0:pct)+'%';
+    document.getElementById('kai51BootPercent').textContent=(failed?'!':pct+'%');
+    document.getElementById('kai51BootStatus').textContent=failed?'MODEL ERROR · RELOAD TO RETRY':String(d.status||'Preparing KAI 51');
   }
 
   const initial=window.HAxBROKai51Bootstrap?.state?.();
-  if(initial?.installed && initial?.verified && initial?.status==='ready'){
+  if(window.HAxBRO_KAI51_LOCAL_READY||window.HAxBROKai51Engine?.isReady?.()){
     hide();
-    window.HAxBRO_KAI51_LOCAL_READY=true;
   }else{
-    render({progress:initial?.status==='installing'?5:0,status:initial?.status==='installing'
-      ?'Restoring KAI 51 from this device…'
-      :'QWEN2.5-CODER 0.5B DOWNLOAD STARTS ON APP VISIT'});
+    render({progress:0,error:initial?.status==='error'?initial.error:null,status:initial?.status==='ready'||initial?.status==='installing'
+      ?'Restoring the installed model from this device…'
+      :'QWEN2.5-CODER 0.5B STARTING ON APP VISIT'});
   }
 
   window.addEventListener('haxbro:kai-local-progress',e=>render(e.detail||{}));

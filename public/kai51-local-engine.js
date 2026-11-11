@@ -15,7 +15,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
   const ensureActive = signal => {
     if(signal?.aborted) throw new DOMException("Response stopped by user","AbortError");
   };
-  const toChatPrompt = messages => messages.map(m=>"<|im_start|>"+m.role+"\\n"+m.content+"<|im_end|>\\n").join("")+"<|im_start|>assistant\\n";
+  // Chat prompts are passed as role/content messages to Wllama.
   async function prepare() {
     if(runtime && readyInfo) return readyInfo;
     if(loading) return loading;
@@ -40,10 +40,10 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
           }
         });
         report(91,"Running the local Coder model self-test");
-        const test = await runtime.createCompletion(toChatPrompt([
+        const test = await runtime.createChatCompletion([
           {role:"system",content:"You are KAI 51. Follow the user's instruction exactly."},
           {role:"user",content:"Reply with exactly: KAI READY"}
-        ]),{nPredict:20,sampling:{temp:0,top_k:1,top_p:1}});
+        ],{nPredict:20,sampling:{temp:0,top_k:1,top_p:1}});
         const text=String(test||"").replace(/<\|im_end\|>|<\|im_start\|>assistant/gi,"").trim();
         if(!text || !/KAI\s*READY/i.test(text)) throw new Error("The downloaded Coder model did not pass its inference self-test: "+text.slice(0,100));
         readyInfo={ok:true,model:MODEL,modelId:MODEL_ID,device:"wasm",verified:true,realModel:true,localModel:true,lane:"qwen25-coder",quantization:"Q4_K_M",selfTest:text};
@@ -75,9 +75,10 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     options.signal?.addEventListener?.("abort",abort,{once:true});
     let timer;
     try {
-      const work=runtime.createCompletion(toChatPrompt(messages),{
+      const work=runtime.createChatCompletion(messages,{
         nPredict:Math.min(700,Math.max(48,Number(options.maxTokens)||360)),
-        sampling:{temp:options.temperature??0.35,top_k:40,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08}
+        sampling:{temp:options.temperature??0.35,top_k:40,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08},
+        abortSignal:options.signal
       });
       const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 120 seconds."));},120000);});
       const result=await Promise.race([work,timeout]);
