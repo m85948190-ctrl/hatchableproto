@@ -68,7 +68,7 @@ finally{if(btn)btn.disabled=false;box?.focus()}
 }
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 async function openDecoder(){const input=window.prompt("DECODING PARTNER · paste encoded text");if(!input)return;log("DECODING PARTNER activated","handoff");try{const rr=await fetch("/api/deepx",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mode:"decode",input})}),dd=await rr.json();if(!rr.ok||!dd.ok)throw Error(dd.error||"Decoder failed");render(dd.result,"decode","DECODING PARTNER INPUT");log("25-method decoding report returned","ok");}catch(e){log("Decoder error: "+e.message,"error")}}
-function open(target="",options={}){state.research=!!options.research;
+function open(target="",options={}){document.getElementById("haxDecodingWorkspace")?.remove();document.getElementById("haxEncryptorMachine")?.remove();state.research=!!options.research;
 const p=ensure();p.style.display="block";p.scrollTop=0;
 document.body.classList.add("xpro-open");
 if(!target){try{const u=(localStorage.getItem("haxbro_username")||"anonymous-device").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"_").slice(0,64)||"anonymous-device";const saved=JSON.parse(localStorage.getItem("haxbro:user:"+u+":xpro_reports")||"[]");const latest=saved[0];if(latest?.result&&$("deepxResults")?.querySelector(".dx-empty"))render(latest.result,latest.mode||"auto",latest.target||"",false)}catch(e){console.warn("X Pro report restore unavailable",e)}}
