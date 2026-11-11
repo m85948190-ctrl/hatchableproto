@@ -1,6 +1,6 @@
 (() => {
   const IS_PHONE = window.HAxBRODeviceProfile?.isPhone === true || window.HAxBRO_DEVICE === "ios" || window.HAxBRO_DEVICE === "android";
-  const VERSION = IS_PHONE ? "kai51-phone-smollm2-135m-v5" : "kai51-desktop-qwen3-0.6b-v5";
+  const VERSION = IS_PHONE ? "kai51-phone-smollm2-135m-v6" : "kai51-desktop-qwen3-0.6b-v6";
   const MODEL = IS_PHONE ? "SmolLM2 135M Instruct" : "Qwen3-0.6B-Instruct";
   const ENGINE_VERSION = IS_PHONE ? "kai51-smollm2-135m-chat-template-v6" : "kai51-qwen3-0.6b-local-v5";
   // Model weights and installation state belong to this browser/device, not
@@ -124,7 +124,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : (IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-0.6B · WebGPU/WASM fallback")});
     enginePromise = (async () => {
-      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=7" : "/kai51-local-engine.js?v=97";
+      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=8" : "/kai51-local-engine.js?v=97";
       const mod = await import(moduleUrl);
       const create = IS_PHONE ? mod.createKai51PhoneEngine : mod.createKai51Engine;
       if (typeof create !== "function") throw new Error(IS_PHONE ? "Phone model engine is missing createKai51PhoneEngine." : "Qwen engine module is missing createKai51Engine.");

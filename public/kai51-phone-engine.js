@@ -1,6 +1,6 @@
 const MODEL_ID = "onnx-community/SmolLM2-135M-Instruct-ONNX-MHA";
 const MODEL_NAME = "SmolLM2 135M Instruct";
-const VERSION = "kai51-smollm2-135m-chat-template-v6";
+const VERSION = "kai51-smollm2-135m-chat-template-v7";
 
 export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}={}) {
   let generator = null;
@@ -35,6 +35,28 @@ export async function createKai51PhoneEngine({onProgress=()=>{},onReady=()=>{}}=
         activeDtype = "q4";
       }
       report(2,activeDevice === "webgpu" ? "Preparing the 118 MB phone model for WebGPU" : "Preparing the compact phone model for CPU compatibility");
+      // Hugging Face metadata currently rejects browser origins other than huggingface.co.
+      // Bridge only the four tiny metadata JSON files through HAxBRO; model weights remain on HF.
+      if (!globalThis.__haxbroSmolMetadataBridgeInstalled) {
+        const originalFetch = globalThis.fetch.bind(globalThis);
+        globalThis.fetch = (input,init) => {
+          const rawUrl = typeof input === "string" || input instanceof URL ? String(input) : String(input?.url || "");
+          let parsed = null;
+          try { parsed = new URL(rawUrl,globalThis.location?.href); } catch {}
+          const prefix = "/onnx-community/SmolLM2-135M-Instruct-ONNX-MHA/resolve/main/";
+          const file = parsed?.origin === "https://huggingface.co" && parsed.pathname.startsWith(prefix)
+            ? parsed.pathname.slice(prefix.length) : "";
+          if (["config.json","generation_config.json","tokenizer_config.json","special_tokens_map.json"].includes(file)) {
+            const localUrl = new URL("/api/kai-model-metadata",globalThis.location.origin);
+            localUrl.searchParams.set("model","smollm2");
+            localUrl.searchParams.set("file",file);
+            if (typeof Request !== "undefined" && input instanceof Request) return originalFetch(new Request(localUrl.toString(),input),init);
+            return originalFetch(localUrl.toString(),init);
+          }
+          return originalFetch(input,init);
+        };
+        globalThis.__haxbroSmolMetadataBridgeInstalled = true;
+      }
       const mod = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2");
       const pipeline = mod.pipeline;
       const env = mod.env;

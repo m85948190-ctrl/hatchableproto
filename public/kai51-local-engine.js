@@ -111,7 +111,7 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
   }
 
   async function loadCompactFallback(reason) {
-    const fallbackModule = await import("/kai51-phone-engine.js?v=7");
+    const fallbackModule = await import("/kai51-phone-engine.js?v=8");
     if (typeof fallbackModule.createKai51PhoneEngine !== "function") {
       throw new Error("Qwen3 needs WebGPU on this device, and the compact local fallback engine is unavailable.");
     }

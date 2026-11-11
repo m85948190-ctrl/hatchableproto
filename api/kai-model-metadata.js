@@ -1,7 +1,10 @@
 export const access = "public";
 export const methods = ["GET"];
 
-const MODEL_BASE = "https://huggingface.co/onnx-community/Qwen3-0.6B-ONNX/resolve/main/";
+const MODEL_BASES = {
+  qwen:"https://huggingface.co/onnx-community/Qwen3-0.6B-ONNX/resolve/main/",
+  smollm2:"https://huggingface.co/onnx-community/SmolLM2-135M-Instruct-ONNX-MHA/resolve/main/"
+};
 const ALLOWED = new Set([
   "config.json",
   "generation_config.json",
@@ -12,12 +15,16 @@ const ALLOWED = new Set([
 export default async function(req, res) {
   if (req.method !== "GET") return res.status(405).send("GET required");
   let file = "";
+  let model = "qwen";
   try {
-    file = new URL(req.url, "https://haxbro.hatchable.site").searchParams.get("file") || "";
+    const params = new URL(req.url, "https://haxbro.hatchable.site").searchParams;
+    file = params.get("file") || "";
+    model = params.get("model") || "qwen";
   } catch {}
-  if (!ALLOWED.has(file)) return res.status(400).json({ok:false,error:"Unsupported model metadata file"});
+  const modelBase = MODEL_BASES[model];
+  if (!modelBase || !ALLOWED.has(file)) return res.status(400).json({ok:false,error:"Unsupported model metadata request"});
   try {
-    const upstream = await fetch(MODEL_BASE + file, {headers:{accept:"application/json"}});
+    const upstream = await fetch(modelBase + file, {headers:{accept:"application/json"}});
     if (!upstream.ok) return res.status(upstream.status).send("Model metadata upstream returned HTTP " + upstream.status);
     const body = await upstream.text();
     res.setHeader("content-type", "application/json; charset=utf-8");
