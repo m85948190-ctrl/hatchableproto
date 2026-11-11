@@ -269,7 +269,12 @@
     // PHASE 1: local-model-only chat. Do not invoke retrieval, browsing, search,
     // workspace tools, rule-based utilities, or external providers in this phase.
     {
-      hooks.onStage?.("model","Loading or restoring the device's selected local model");
+      // Do not announce a model load on every chat turn. The live engine is
+      // retained in this page's singleton and reused for every subsequent message.
+      const modelAlreadyResident = !!engine?.isReady?.();
+      if (!modelAlreadyResident) {
+        hooks.onStage?.("model","Loading the device's local model for the first time");
+      }
       const localNeural = await loadEngine(hooks);
       ensureActive(hooks.signal);
       hooks.onStage?.("thinking",MODEL+" is understanding the request");
