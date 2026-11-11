@@ -1,6 +1,6 @@
 (() => {
   const IS_PHONE = window.HAxBRODeviceProfile?.isPhone === true || window.HAxBRO_DEVICE === "ios" || window.HAxBRO_DEVICE === "android";
-  const VERSION = IS_PHONE ? "kai51-phone-smollm2-135m-v5" : "kai51-desktop-qwen3-0.6b-v4";
+  const VERSION = IS_PHONE ? "kai51-phone-smollm2-135m-v5" : "kai51-desktop-qwen3-0.6b-v5";
   const MODEL = IS_PHONE ? "SmolLM2 135M Instruct" : "Qwen3-0.6B-Instruct";
   const ENGINE_VERSION = IS_PHONE ? "kai51-smollm2-135m-chat-template-v6" : "kai51-qwen3-0.6b-local-v5";
   // Model weights and installation state belong to this browser/device, not
@@ -124,7 +124,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : (IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-0.6B · WebGPU/WASM fallback")});
     enginePromise = (async () => {
-      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=7" : "/kai51-local-engine.js?v=96";
+      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=7" : "/kai51-local-engine.js?v=97";
       const mod = await import(moduleUrl);
       const create = IS_PHONE ? mod.createKai51PhoneEngine : mod.createKai51Engine;
       if (typeof create !== "function") throw new Error(IS_PHONE ? "Phone model engine is missing createKai51PhoneEngine." : "Qwen engine module is missing createKai51Engine.");
@@ -136,6 +136,7 @@
         },
         onReady:info => {
           writeState({status:"ready",installed:true,verified:true,error:null,model:info?.model || engine?.model || MODEL});
+          if(modelLabel) modelLabel.textContent = IS_PHONE ? "KAI · 135M" : (info?.fallback ? "KAI · 135M CPU" : "KAI · 600M");
           window.HAxBROKai51Installed = true;
           window.HAxBRO_KAI51_LOCAL_READY = true;
           window.dispatchEvent(new CustomEvent("haxbro:kai51-ready",{detail:info || {}}));
@@ -277,16 +278,17 @@
       }
       const localNeural = await loadEngine(hooks);
       ensureActive(hooks.signal);
-      hooks.onStage?.("thinking",MODEL+" is understanding the request");
+      const activeModelName = localNeural?.model || MODEL;
+      hooks.onStage?.("thinking",activeModelName+" is understanding the request");
       const localAnswer = await localNeural.generate(buildPrompt(text,history),history,{
         signal:hooks.signal,maxTokens:IS_PHONE?180:520,temperature:0.45,topP:0.9
       });
       ensureActive(hooks.signal);
       const localResponse=String(localAnswer?.response||"").trim();
-      if(!localResponse) throw new Error(MODEL+" returned an empty answer.");
-      hooks.onStage?.("composing",MODEL+" generated the response locally");
+      if(!localResponse) throw new Error(activeModelName+" returned an empty answer.");
+      hooks.onStage?.("composing",activeModelName+" generated the response locally");
       return {
-        ...localAnswer,response:localResponse,lane:IS_PHONE?"phone":"qwen",model:MODEL,
+        ...localAnswer,response:localResponse,lane:IS_PHONE?"phone":(activeModelName!==MODEL?"compact-local":"qwen"),model:localAnswer?.model||activeModelName,
         local:true,localModel:true,research:false,sources:[],searchEngines:[],
         combined:true,phase:"local-model-only"
       };
