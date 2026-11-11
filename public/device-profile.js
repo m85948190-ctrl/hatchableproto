@@ -8,8 +8,8 @@
     device: window.HAxBRO_DEVICE,
     isPhone: handheld,
     isDesktop: !handheld,
-    model: handheld ? "SmolLM2 135M Instruct" : "Qwen3-0.6B-Instruct",
-    downloadLabel: handheld ? "about 118 MB of Q4F16 weights" : "compact Q4F16 ONNX weights · WebGPU recommended"
+    model: "Qwen2.5-Coder-0.5B-Instruct · Q4_K_M GGUF",
+    downloadLabel: "about 379 MB · one shared local model on every device"
   });
   document.documentElement.dataset.haxbroDevice = window.HAxBRO_DEVICE;
 })();

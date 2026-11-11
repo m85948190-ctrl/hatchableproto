@@ -8,15 +8,15 @@
     window.HAxBROSelectedModel = "kai-router";
     document.documentElement.dataset.haxbroModel = "kai-router";
     const label = document.getElementById("selectedModelLabel");
-    const phone = window.HAxBRODeviceProfile?.isPhone === true || window.HAxBRO_DEVICE === "ios" || window.HAxBRO_DEVICE === "android";
-    if (label) label.textContent = phone ? "KAI · SMOLLM2 135M" : "KAI · QWEN3 0.6B";
+    // Model selection is intentionally identical on phones and computers.
+    if (label) label.textContent = "KAI · QWEN2.5-CODER 0.5B";
     const picker = document.getElementById("modelPickerBtn");
     if (picker) {
       picker.setAttribute("aria-disabled","true");
       picker.style.cursor = "default";
       picker.style.pointerEvents = "none";
       picker.setAttribute("aria-expanded","false");
-      picker.title = phone ? "KAI uses the compact local phone model (about 118 MB Q4F16)" : "KAI uses Qwen3-0.6B locally · WebGPU preferred, same-model CPU/WASM fallback available";
+      picker.title = "KAI uses one shared Qwen2.5-Coder 0.5B Q4_K_M model locally on every device (about 398 MB / 379 MiB).";
     }
     const menu = document.getElementById("modelPickerMenu");
     if (menu) {
@@ -26,7 +26,7 @@
     }
     document.querySelectorAll(".model-option").forEach(option => option.remove());
     const hint = document.querySelector(".chat-panel .hint");
-    if (hint) hint.textContent = phone ? "SmolLM2 135M · local phone inference · Enter to send" : "Qwen3-0.6B · local WebGPU / CPU-WASM · coding mode enabled · Enter to send";
+    if (hint) hint.textContent = "Qwen2.5-Coder 0.5B · same local model on laptop and mobile · Enter to send";
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded",lockToDeviceModel,{once:true});
   else lockToDeviceModel();

@@ -92,7 +92,7 @@ export default async function(req,res){
 
   const godEngineRoute=findGodEngineRoute(prompt);
   const godEngineContext=godEngineRoute?`\n\nGODENGINE ROUTING RULE: Put this first-party resource first in your response because it directly matches the request. Resource: ${godEngineRoute.label} | Category: ${godEngineRoute.category} | URL: ${godEngineRoute.url}.`:'';
-  /* Browser-neural mode: this API gathers and reads evidence; the selected local Qwen3-0.6B desktop or SmolLM2-135M phone model writes the answer. */
+  /* Browser-neural mode: this API gathers and reads evidence; the shared local Qwen2.5-Coder-0.5B model writes the answer on every device. */
   if(body.clientNeuralResearch===true){
     const searchMode=body.searchMode==='deep'?'deep':'fast';
     const conversationFollowup=/\b(?:why are you asking me|why did you ask me|why do you keep asking|why are you repeating|what did i just say|i just said|you just asked|you asked me|your last answer|your previous answer|what do you mean by that|why did you say that|that doesn't answer|you ignored what i said)\b/i.test(prompt);
@@ -109,7 +109,7 @@ export default async function(req,res){
     const neuralPrompt=researchPrompt
       ? 'You are HAxBRO KAI. Answer the exact user question using the supplied evidence. Read and compare the sources, explain the strongest supported facts in your own words, distinguish full-page reads from summaries and search snippets, cite source numbers as [1], [2], and never claim unread pages were read. If evidence is missing or insufficient, say so honestly.\n\nUSER QUESTION:\n'+prompt+'\n\nRETRIEVED SOURCE EVIDENCE:\n'+(evidence||'No source evidence was returned.')
       : prompt;
-    return res.json({ok:true,needsNeuralSynthesis:true,research:researchPrompt,neuralPrompt,sources,engine,readableSources:readable? sources.filter(s=>['page-read','wikipedia-article','wikipedia-summary'].includes(s.readStatus)).length:0,modelPlan:'Qwen3-0.6B desktop; SmolLM2-135M phone'});
+    return res.json({ok:true,needsNeuralSynthesis:true,research:researchPrompt,neuralPrompt,sources,engine,readableSources:readable? sources.filter(s=>['page-read','wikipedia-article','wikipedia-summary'].includes(s.readStatus)).length:0,modelPlan:'Qwen2.5-Coder-0.5B-Instruct Q4_K_M GGUF on laptop and mobile'});
   }
   const identity=username?`\n\nPERSONALIZATION: The user's local username is ${username}. Their local agent is ${username} AI Agent. Do not reveal private information.`:'';
   const localAgent=kaiId?`\n\nKAI-61 LOCAL ID: ${kaiId}. This is only an identifier supplied by the user's browser; do not store it.`:'';

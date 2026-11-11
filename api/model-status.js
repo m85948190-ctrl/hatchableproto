@@ -13,35 +13,30 @@ export default async function(req, res) {
   if (req.method !== "GET") return res.status(405).json({ ok: false, error: "GET required" });
   res.setHeader("cache-control", "no-store");
   const live = {
-    auto: false,
-    openrouter: false,
-    groq: false,
-    mistral: false,
-    cerebras: false,
-    google: false,
-    openai: false,
-    kai51: true,
-    kai89: false,
-    kaiLite: false
+    auto: false, openrouter: false, groq: false, mistral: false,
+    cerebras: false, google: false, openai: false, kai51: true,
+    kai89: false, kaiLite: false
   };
   return res.json({
     ok: true,
     live,
     configured: { ...live },
     model: {
-      name: "Qwen3-0.6B",
-      base: "Qwen/Qwen3-0.6B",
-      browserRuntime: "onnx-community/Qwen3-0.6B-ONNX",
-      parameterClass: "0.6B",
+      name: "Qwen2.5-Coder-0.5B-Instruct",
+      base: "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+      browserRuntime: "@wllama/wllama 2.3.7 · llama.cpp WebAssembly",
+      format: "GGUF",
+      quantization: "Q4_K_M",
+      parameterClass: "0.5B (approximately 0.6B rounded)",
+      approximateDownload: "about 398 MB (379 MiB)",
       inference: "local browser inference; no hosted chat provider",
-      desktop: { preferred: "WebGPU", quantization: "q4f16", fallback: "CPU/WASM q4 using the same Qwen3 weights" },
-      phone: { model: "SmolLM2-135M-Instruct", browserRuntime: "onnx-community/SmolLM2-135M-Instruct-ONNX-MHA", preferred: "WebGPU Q4F16", fallback: "CPU/WASM Q4 using the same phone model", approximateDownload: "118 MB WebGPU Q4F16; about 182 MB CPU Q4" },
-      research: { sharedAcrossBothDeviceModels: true, webSearch: ["Google", "Bing", "DuckDuckGo"], wikipedia: "search plus article-text extraction", webpageReading: "managed read-only browser extraction", synthesis: "the selected on-device model" },
+      devices: { laptop: "same Q4_K_M GGUF model", mobile: "same Q4_K_M GGUF model" },
+      research: { sharedAcrossDevices: true, webSearch: ["Google", "Bing", "DuckDuckGo"], wikipedia: "search plus article-text extraction", webpageReading: "managed read-only browser extraction", synthesis: "the shared on-device Qwen2.5-Coder model" },
       autoInstallOnVisit: true,
       browserCache: true,
       codingMode: true,
       fineTuning: { method: "PEFT/LoRA", status: "training pipeline prepared; fine-tuned weights not yet produced" }
     },
-    readiness: "This endpoint reports configuration only. Each browser reports its selected device model ready only after that model completes its own local inference self-test."
+    readiness: "This endpoint reports configuration only. Each browser reports ready only after the local GGUF model completes its inference self-test."
   });
 }
