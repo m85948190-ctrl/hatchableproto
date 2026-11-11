@@ -1,4 +1,4 @@
-const CACHE='haxbro-shell-v77-shared-coder-model';
+const CACHE='haxbro-shell-v78-shared-coder-model-cleanup';
 const ASSETS=[
   '/','/index.html','/app/','/app/index.html',
   '/style.css?v=219','/ui-fixes.css?v=218','/responsive-fixes.css?v=218',

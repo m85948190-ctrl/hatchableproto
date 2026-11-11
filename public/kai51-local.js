@@ -5,6 +5,12 @@
   // Model weights and installation state belong to this browser/device, not
   // to an individual local username. All HAxBRO profiles reuse one model cache.
   const KEY = () => "haxbro:kai51:shared-qwen25-coder-05b-q4km:v1";
+  // Remove only the retired KAI model caches and their install markers; preserve all other site/user data.
+  try {
+    localStorage.removeItem("haxbro:kai51:device:phone-installation:v2");
+    localStorage.removeItem("haxbro:kai51:device:qwen3-0.6b-installation:v2");
+    if (window.caches?.keys) caches.keys().then(keys=>Promise.all(keys.filter(name=>/haxbro-(?:smollm2-135m|qwen3-06b)/i.test(name)).map(name=>caches.delete(name)))).catch(()=>{});
+  } catch {}
   let state = readState();
   const modelLabel = document.getElementById("selectedModelLabel");
   if (modelLabel) modelLabel.textContent = "KAI · QWEN2.5-CODER 0.5B";
