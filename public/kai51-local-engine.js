@@ -79,10 +79,14 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     const abort=()=>{try{runtime?.interrupt?.();}catch{}};
     options.signal?.addEventListener?.("abort",abort,{once:true});
     let timer;
+    const userText=String(prompt||"").split(/\nUSER:\s*/).pop().trim();
+    const isGreeting=/^(?:hi|hey|hello|yo|sup|good morning|good evening|good afternoon)(?:\s+bro)?[!. ]*$/i.test(userText);
+    const isCoding=/\b(?:code|coding|program|script|function|class|debug|html|css|javascript|python|typescript|sql|api)\b/i.test(userText);
+    const tokenBudget=isGreeting?24:(isCoding?160:96);
     try {
       const work=runtime.createChatCompletion(messages,{
         // This 0.5B WASM model is tuned for concise answers on CPU-only devices.
-        nPredict:(/^(?:hi|hey|hello|yo|sup|good morning|good evening|good afternoon)[!. ]*$/i.test(String(prompt||"").trim())?24:(/\b(?:code|coding|program|script|function|class|debug|html|css|javascript|python|typescript|sql|api)\b/i.test(String(prompt||""))?160:96)),
+        nPredict:tokenBudget,
         sampling:{temp:options.temperature??0.35,top_k:32,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08},
         useCache:true,
         abortSignal:options.signal
