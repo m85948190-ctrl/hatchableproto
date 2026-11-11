@@ -124,7 +124,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : (IS_PHONE ? "Preparing SmolLM2 135M for this phone" : "Preparing Qwen3-0.6B · WebGPU/WASM fallback")});
     enginePromise = (async () => {
-      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=7" : "/kai51-local-engine.js?v=95";
+      const moduleUrl = IS_PHONE ? "/kai51-phone-engine.js?v=7" : "/kai51-local-engine.js?v=96";
       const mod = await import(moduleUrl);
       const create = IS_PHONE ? mod.createKai51PhoneEngine : mod.createKai51Engine;
       if (typeof create !== "function") throw new Error(IS_PHONE ? "Phone model engine is missing createKai51PhoneEngine." : "Qwen engine module is missing createKai51Engine.");

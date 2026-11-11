@@ -26,6 +26,33 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     ]).finally(()=>clearTimeout(timer));
   }
   async function getTransformers() {
+    // Hugging Face currently serves several small Qwen metadata files with
+    // Access-Control-Allow-Origin: https://huggingface.co (not *). That blocks
+    // browsers running HAxBRO on its own domain. Bridge only those four small
+    // metadata requests through HAxBRO's same-origin endpoint; keep the 570 MB
+    // ONNX weights and tokenizer.json on Hugging Face's CDN.
+    if (!globalThis.__haxbroQwenMetadataBridgeInstalled) {
+      const originalFetch = globalThis.fetch.bind(globalThis);
+      globalThis.fetch = (input, init) => {
+        const rawUrl = typeof input === "string" || input instanceof URL
+          ? String(input) : String(input?.url || "");
+        let parsed = null;
+        try { parsed = new URL(rawUrl, globalThis.location?.href); } catch {}
+        const prefix = "/onnx-community/Qwen3-0.6B-ONNX/resolve/main/";
+        const file = parsed?.origin === "https://huggingface.co" && parsed.pathname.startsWith(prefix)
+          ? parsed.pathname.slice(prefix.length) : "";
+        if (["config.json","generation_config.json","tokenizer_config.json","special_tokens_map.json"].includes(file)) {
+          const localUrl = new URL("/api/kai-model-metadata", globalThis.location.origin);
+          localUrl.searchParams.set("file", file);
+          if (typeof Request !== "undefined" && input instanceof Request) {
+            return originalFetch(new Request(localUrl.toString(), input), init);
+          }
+          return originalFetch(localUrl.toString(), init);
+        }
+        return originalFetch(input, init);
+      };
+      globalThis.__haxbroQwenMetadataBridgeInstalled = true;
+    }
     transformers ||= await import(TRANSFORMERS_URL);
     if(typeof transformers.pipeline!=="function") throw new Error("Transformers.js did not expose its text-generation pipeline.");
     const env=transformers.env;
