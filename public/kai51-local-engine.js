@@ -140,8 +140,10 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     const userText=directPrompt.split(/\nUSER:\s*/).pop().trim();
     const isGreeting=/^(?:hi|hey|hello|yo|sup|good morning|good evening|good afternoon)(?:\s+bro)?[!. ]*$/i.test(userText);
     const isCoding=/\b(?:code|coding|program|script|function|class|debug|html|css|javascript|python|typescript|sql|api)\b/i.test(userText);
-    const requested=Number(options.maxTokens||0);
-    const tokenBudget=isGreeting?48:Math.max(isCoding?192:160,Math.min(512,requested||256));
+    // Keep ordinary turns short on CPU-only devices; the prototype's
+    // fast path was a compact single-turn completion, not a long essay run.
+    // Coding answers get a larger but still bounded budget.
+    const tokenBudget=isGreeting?24:(isCoding?128:48);
     try {
       const work=runtime.createChatCompletion([{role:"user",content:directPrompt}],{
         nPredict:tokenBudget,
