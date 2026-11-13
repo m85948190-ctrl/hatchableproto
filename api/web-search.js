@@ -104,6 +104,30 @@ async function bingNews(query) {
     return { title, url: target, snippet, publishedAt: publishedAt || null, provider: "Bing News" };
   }).filter(Boolean);
 }
+async function ddgWeb(query) {
+  const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query);
+  const response = await fetch(url, { headers: { accept: "text/html,application/xhtml+xml", "user-agent": "Mozilla/5.0 (compatible; HAxBRO-WebSearch/1.0)" } });
+  if (!response.ok) throw new Error("DuckDuckGo Web HTTP " + response.status);
+  const html = await response.text();
+  const blocks = html.match(/<div class=["'][^"']*result__body[^"']*["'][\s\S]*?(?=<div class=["'][^"']*result__body|<\/body>)/gi) || [];
+  return blocks.map(block => {
+    const anchor = block.match(/<a\b([^>]*class=["'][^"']*result__a[^"']*["'][^>]*)>([\s\S]*?)<\/a>/i);
+    if (!anchor) return null;
+    const href = (anchor[1].match(/href=["']([^"']+)["']/i) || [])[1] || "";
+    let target = "";
+    try {
+      const parsed = new URL(href.startsWith("//") ? "https:" + href : href, "https://duckduckgo.com");
+      target = parsed.searchParams.get("uddg") || parsed.href;
+    } catch {}
+    target = normalizeUrl(target);
+    if (!target) return null;
+    try { if (/(^|\.)duckduckgo\.com$/i.test(new URL(target).hostname)) return null; } catch { return null; }
+    const title = clean(decodeEntities(anchor[2].replace(/<[^>]+>/g, " ")), 240);
+    const snippetMatch = block.match(/<(?:a|div)[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|div)>/i);
+    const snippet = clean(decodeEntities((snippetMatch?.[1] || "").replace(/<[^>]+>/g, " ")), 1800);
+    return title ? { title, url: target, snippet, provider: "DuckDuckGo Web" } : null;
+  }).filter(Boolean).slice(0, 10);
+}
 function dedupe(rows) {
   const seen = new Set(), output = [];
   for (const row of rows) {
@@ -128,10 +152,16 @@ export default async function(req, res) {
   const wantNews = req.body?.type === "news" || NEWS_WORDS.test(query);
   const plan = queryPlan(query);
   const providerErrors = [];
-  const tasks = plan.map(async q => {
-    try { return await bingWeb(q); }
-    catch (error) { providerErrors.push({ provider: "Bing Web", query: q, error: clean(error?.message, 160) }); return []; }
-  });
+  const tasks = plan.flatMap(q => [
+    (async () => {
+      try { return await bingWeb(q); }
+      catch (error) { providerErrors.push({ provider: "Bing Web", query: q, error: clean(error?.message, 160) }); return []; }
+    })(),
+    (async () => {
+      try { return await ddgWeb(q); }
+      catch (error) { providerErrors.push({ provider: "DuckDuckGo Web", query: q, error: clean(error?.message, 160) }); return []; }
+    })()
+  ]);
   if (wantNews) {
     const newsQuery = plan[1] || plan[0];
     tasks.push((async () => {
@@ -142,7 +172,7 @@ export default async function(req, res) {
   const batches = await Promise.all(tasks);
   const raw = batches.flat();
   const ranked = dedupe(raw).map(row => ({ ...row, _score: relevance(row, query) }))
-    .filter(row => row._score >= (query.split(/\s+/).length >= 4 ? 0.2 : 0.15))
+    .filter(row => row._score >= (query.split(/\s+/).length >= 4 ? 0.35 : 0.25))
     .sort((a, b) => b._score - a._score);
   const limit = mode === "deep" ? 20 : 12;
   const results = ranked.slice(0, limit).map(({ _score, ...row }, index) => ({ ...row, rank: index + 1, snippet: clean(row.snippet, 1800) }));
@@ -155,11 +185,12 @@ export default async function(req, res) {
   }
   const providerCounts = {
     bingWeb: results.filter(row => row.provider === "Bing Web").length,
+    duckduckgoWeb: results.filter(row => row.provider === "DuckDuckGo Web").length,
     bingNews: results.filter(row => row.provider === "Bing News").length
   };
   return res.json({
     ok: true, query, mode, searchQueries: plan,
-    provider: "Bing Web" + (providerCounts.bingNews ? " + Bing News" : ""),
+    provider: [providerCounts.bingWeb ? "Bing Web" : "", providerCounts.duckduckgoWeb ? "DuckDuckGo Web" : "", providerCounts.bingNews ? "Bing News" : ""].filter(Boolean).join(" + "),
     providers: providerCounts, count: results.length,
     results, sources: results,
     partial: results.length < 5,

@@ -119,6 +119,8 @@
     // ISO-like dates are not arithmetic expressions (e.g. 2011-06-28).
     if(/\b(?:19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/.test(raw)) return null;
     const number='[+-]?\\d[\\d,]*(?:\\.\\d+)?';
+    const percent=raw.match(new RegExp('('+number+')\\s*(?:percent|%)\\s*of\\s*('+number+')','i'));
+    if(percent){const a=Number(percent[1].replace(/,/g,'')),b=Number(percent[2].replace(/,/g,'')),result=a*b/100;if(Number.isFinite(result))return {expression:a+'% of '+b,result};}
     const natural=raw.match(new RegExp('(?:what\\s+is|calculate|compute|work\\s+out)?\\s*('+number+')\\s*(times|multiplied\\s+by|plus|added\\s+to|minus|subtracted\\s+by|divided\\s+by|over|to\\s+the\\s+power\\s+of|[x×])\\s*('+number+')','i'));
     if(natural){
       const a=natural[1].replace(/,/g,''),opText=natural[2].toLowerCase(),b=natural[3].replace(/,/g,'');
@@ -127,18 +129,18 @@
       const av=Number(a),bv=Number(b);let result=op==='*'?av*bv:op==='+'?av+bv:op==='-'?av-bv:op==='/'?av/bv:Math.pow(av,bv);
       if(Number.isFinite(result))return {expression,result};
     }
-    const candidates=raw.match(/[+-]?\d[\d,]*(?:\.\d+)?(?:\s*(?:\+|-|\*|\/|×|÷|\^)\s*[+-]?\d[\d,]*(?:\.\d+)?)+/g)||[];
+    const candidates=raw.match(/(?:\d[\d,]*(?:\.\d+)?|\()\s*(?:[+\-*/^%×÷()]|\d[\d,]*(?:\.\d+)?|\s)+/g)||[];
     const expression=candidates.sort((a,b)=>b.length-a.length)[0];
     if(!expression)return null;
-    const tokens=expression.replace(/,/g,'').replace(/×/g,'*').replace(/÷/g,'/').match(/\d+(?:\.\d+)?|[()+\-*/^]/g)||[];
+    const tokens=expression.replace(/,/g,'').replace(/×/g,'*').replace(/÷/g,'/').match(/\d+(?:\.\d+)?|[()+\-*/^%]/g)||[];
     if(!tokens.length)return null;
     const values=[],ops=[];
-    const precedence={'+':1,'-':1,'*':2,'/':2,'^':3};
+    const precedence={'+':1,'-':1,'*':2,'/':2,'%':2,'^':3};
     const apply=()=>{
       const op=ops.pop(),b=values.pop(),a=values.pop();
       if(a===undefined||b===undefined)throw new Error('invalid expression');
       let v;
-      if(op==='+')v=a+b;else if(op==='-')v=a-b;else if(op==='*')v=a*b;else if(op==='/')v=a/b;else if(op==='^')v=Math.pow(a,b);else throw new Error('invalid operator');
+      if(op==='+')v=a+b;else if(op==='-')v=a-b;else if(op==='*')v=a*b;else if(op==='/')v=a/b;else if(op==='%')v=a%b;else if(op==='^')v=Math.pow(a,b);else throw new Error('invalid operator');
       if(!Number.isFinite(v))throw new Error('non-finite result');
       values.push(v);
     };
@@ -148,7 +150,7 @@
         if(/^\d/.test(token)){if(!expectNumber)return null;values.push(Number(token));expectNumber=false;continue;}
         if(token==='('){if(!expectNumber)return null;ops.push(token);continue;}
         if(token===')'){while(ops.length&&ops.at(-1)!=='(')apply();if(ops.pop()!=='('||expectNumber)return null;expectNumber=false;continue;}
-        if('+-*/^'.includes(token)){
+        if('+-*/^%'.includes(token)){
           if(expectNumber){if(token==='-'){values.push(0);ops.push('-');continue;}return null;}
           while(ops.length&&ops.at(-1)!=='('&&(precedence[ops.at(-1)]>precedence[token]||(precedence[ops.at(-1)]===precedence[token]&&token!=='^')))apply();
           ops.push(token);expectNumber=true;continue;

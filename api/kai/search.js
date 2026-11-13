@@ -169,7 +169,7 @@ async function multiSearch(query,mode="fast"){
   });
   const google=filterRelevant(collect(googleResults,"Google Web",6));
   const bing=filterRelevant(collect(bingResults,"Bing Web",6));
-  const duckduckgo=filterRelevant(collect(ddgResults,"DuckDuckGo Instant Answers",6));
+  const duckduckgo=filterRelevant(collect(ddgResults,"DuckDuckGo Web",8));
   const news=filterRelevant(collect(newsResults,"Google News",8));
   const merged=[],seen=new Set();
   for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length,news.length);i++){
@@ -179,17 +179,33 @@ async function multiSearch(query,mode="fast"){
 }
 
 async function ddgSearch(query){
-  // The HTML results page is presenting a human-verification challenge. Use the
-  // official Instant Answer endpoint instead; it returns a smaller, honest data set.
-  const url="https://api.duckduckgo.com/?q="+encodeURIComponent(query)+"&format=json&no_html=1&skip_disambig=1";
-  const response=await fetch(url,{headers:{accept:"application/json"}});
-  if(!response.ok)throw new Error("DuckDuckGo Instant Answer HTTP "+response.status);
-  const data=await response.json();
+  // DuckDuckGo's public HTML results endpoint returns real website results;
+  // its Instant Answer API often returns no results for ordinary searches.
+  const url="https://html.duckduckgo.com/html/?q="+encodeURIComponent(query);
+  const response=await fetch(url,{headers:{accept:"text/html,application/xhtml+xml","user-agent":"Mozilla/5.0 (compatible; HAxBROResearch/1.0)"}});
+  if(!response.ok)throw new Error("DuckDuckGo Web HTTP "+response.status);
+  const html=await response.text();
+  const blocks=html.match(/<div class=["'][^"']*result__body[^"']*["'][\s\S]*?(?=<div class=["'][^"']*result__body|<\/body>)/gi)||[];
   const out=[];
-  if(data.AbstractText&&data.AbstractURL)out.push({title:data.Heading||data.AbstractSource||"DuckDuckGo instant answer",url:data.AbstractURL,text:clean(data.AbstractText,1600)});
-  const addTopics=(items)=>{for(const item of items||[]){if(item?.FirstURL&&item?.Text)out.push({title:clean(item.Text.split(" - ")[0],180),url:item.FirstURL,text:clean(item.Text,900)});if(item?.Topics)addTopics(item.Topics);if(out.length>=6)break;}};
-  addTopics(data.RelatedTopics);
-  return out.slice(0,6);
+  for(const block of blocks){
+    const anchor=block.match(/<a\b([^>]*class=["'][^"']*result__a[^"']*["'][^>]*)>([\s\S]*?)<\/a>/i);
+    if(!anchor)continue;
+    const href=(anchor[1].match(/href=["']([^"']+)["']/i)||[])[1]||"";
+    let target="";
+    try{
+      const parsed=new URL(href.startsWith("//")?"https:"+href:href,"https://duckduckgo.com");
+      target=parsed.searchParams.get("uddg")||"";
+      if(!/^https?:\/\//i.test(target))target=parsed.href;
+    }catch{}
+    if(!/^https?:\/\//i.test(target))continue;
+    try{if(/(^|\.)duckduckgo\.com$/i.test(new URL(target).hostname))continue;}catch{continue;}
+    const title=htmlText(anchor[2]);
+    const snippetMatch=block.match(/<(?:a|div)[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|div)>/i);
+    const snippet=htmlText(snippetMatch?.[1]||"");
+    if(title&&!out.some(x=>x.url===target))out.push({title,url:target,text:snippet,engine:"DuckDuckGo Web"});
+    if(out.length>=8)break;
+  }
+  return out;
 }
 
 async function wikipediaEvidence(query){
@@ -280,14 +296,25 @@ export default async function(req,res){
         return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
       }catch{return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
     }));
-    const combined=[...pages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>x.text||x.title);
+    const terms=(queryVariants(query)[1]||query).toLowerCase().match(/[a-z0-9]{4,}/g)||[];
+    const relevantPages=pages.filter(x=>{
+      if(!terms.length)return true;
+      const content=(String(x.title||"")+" "+String(x.text||"")).toLowerCase();
+      const matches=terms.filter(term=>content.includes(term.slice(0,Math.max(4,term.length-2)))).length;
+      return matches>=Math.min(2,terms.length);
+    });
+    const combined=[...relevantPages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>x.text||x.title);
     const seen=new Set();
-    const sources=combined.filter(x=>{const key=x.url||x.title;if(!key||seen.has(key))return false;seen.add(key);return true;}).slice(0,take+2);
-    // Never report a successful research run with an empty or one-page source set.
-    // If the providers cannot supply at least three distinct sources, stop before
-    // the local model runs so it cannot disguise a failed search as researched AI.
-    if(sources.length<3)return res.status(503).json({ok:false,error:"Web search returned fewer than 3 distinct readable sources. Please retry; no AI summary was generated.",sourceCount:sources.length,engines:searched.engines||{}});
-    return res.json({ok:true,engine:[searched.engine,wiki.length?"Wikipedia":""].filter(Boolean).join(" + "),engines:searched.engines||{},mode,query,searchQueries:queryVariants(query),sources});
+    const sources=combined.filter(x=>{
+      let host="";
+      try{host=new URL(x.url).hostname.replace(/^www\\./i,"").toLowerCase();}catch{}
+      if(!host||seen.has(host))return false;
+      seen.add(host);return true;
+    }).slice(0,take);
+    // Require more than one independent website. A lone page or a list of
+    // duplicate pages from one publisher is not a successful research run.
+    if(sources.length<2)return res.status(503).json({ok:false,error:"Web search could not verify at least two independent readable websites. Please retry with a more specific query; no AI summary was generated.",sourceCount:sources.length,engines:searched.engines||{}});
+    return res.json({ok:true,engine:[searched.engine,wiki.length?"Wikipedia":""].filter(Boolean).join(" + "),engines:searched.engines||{},mode,query,searchQueries:queryVariants(query),sourceCount:sources.length,independentDomains:sources.length,partial:sources.length<3,sources});
   }catch(e){
     return res.status(502).json({ok:false,error:"KAI web search unavailable",detail:clean(e?.message,300)});
   }
