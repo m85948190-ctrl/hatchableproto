@@ -129,32 +129,32 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     ensureActive(options.signal);
     await prepare();
     ensureActive(options.signal);
-    const messages=[
-      {role:"system",content:"You are KAI 51, a helpful local AI assistant. Answer directly, naturally and accurately. Be concise for simple messages. For coding requests, give complete runnable code. Never claim an action you did not perform."},
-      // Recent turns and saved context are already included in the KAI prompt.
-      {role:"user",content:String(prompt||"")}
-    ];
+    // Prototype-compatible inference: send one complete prompt straight to
+    // the downloaded GGUF model. KAI context and conversation history are
+    // already composed by the caller, so do not wrap or rewrite them again.
+    const directPrompt=String(prompt||"").trim();
+    if(!directPrompt) throw new Error(MODEL+" received an empty prompt.");
     const abort=()=>{try{runtime?.interrupt?.();}catch{}};
     options.signal?.addEventListener?.("abort",abort,{once:true});
     let timer;
-    const userText=String(prompt||"").split(/\nUSER:\s*/).pop().trim();
+    const userText=directPrompt.split(/\nUSER:\s*/).pop().trim();
     const isGreeting=/^(?:hi|hey|hello|yo|sup|good morning|good evening|good afternoon)(?:\s+bro)?[!. ]*$/i.test(userText);
     const isCoding=/\b(?:code|coding|program|script|function|class|debug|html|css|javascript|python|typescript|sql|api)\b/i.test(userText);
-    const tokenBudget=isGreeting?24:(isCoding?160:96);
+    const requested=Number(options.maxTokens||0);
+    const tokenBudget=isGreeting?48:Math.max(isCoding?192:160,Math.min(512,requested||256));
     try {
-      const work=runtime.createChatCompletion(messages,{
-        // This 0.5B WASM model is tuned for concise answers on CPU-only devices.
+      const work=runtime.createChatCompletion([{role:"user",content:directPrompt}],{
         nPredict:tokenBudget,
         sampling:{temp:options.temperature??0.35,top_k:32,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08},
-        useCache:true,
-        abortSignal:options.signal
+        useCache:true
       });
-      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 300 seconds. The local model did not finish within the device inference limit."));},300000);});
+      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 180 seconds. The local model did not finish within the device inference limit."));},180000);});
       const result=await Promise.race([work,timeout]);
       ensureActive(options.signal);
-      const response=String(result||"").replace(/<\|im_end\|>|<\|im_start\|>assistant/gi,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
-      if(!response) throw new Error(MODEL+" returned an empty response.");
-      return {response,provider:MODEL+" · local WASM",model:MODEL,modelId:MODEL_ID,device:"wasm",local:true,localModel:true,lane:"qwen25-coder",quantization:"Q4_K_M"};
+      const raw=typeof result==="string"?result:(result?.response??result?.text??result?.content??result?.message??"");
+      const response=String(raw||"").replace(/<\|im_end\|>|<\|im_start\|>assistant/gi,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
+      if(!response) throw new Error(MODEL+" returned an empty response from local inference.");
+      return {response,provider:MODEL+" · local Wllama inference",model:MODEL,modelId:MODEL_ID,device:"wasm",local:true,localModel:true,lane:"qwen25-coder",quantization:"Q4_K_M"};
     } finally {
       clearTimeout(timer);
       options.signal?.removeEventListener?.("abort",abort);
