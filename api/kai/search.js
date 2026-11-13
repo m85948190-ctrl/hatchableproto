@@ -277,9 +277,10 @@ export default async function(req,res){
   if(!query)return res.status(400).json({error:"query required"});
   const mode=req.body?.mode==="deep"?"deep":"fast";
   try{
+    const freshQuery=/\b(news|latest|today|breaking|recent|this week|this month|announced|announcement|release|released|update|updates)\b/i.test(query);
     const [searched,wiki]=await Promise.all([
       multiSearch(query,mode),
-      wikipediaEvidence(query)
+      freshQuery?Promise.resolve([]):wikipediaEvidence(query)
     ]);
     const links=searched.links||[];
     const take=8;
