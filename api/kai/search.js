@@ -293,14 +293,14 @@ export default async function(req,res){
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
         const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden|wikimedia error|too many requests|error 429|http 429|rate limit|complete the following challenge|select all squares|human verification|protection\. privacy|donor privacy policy|please donate|support wikipedia|wikipedia.{0,100}(?:donat|fundrais)|(?:donat|fundrais).{0,100}wikipedia/i.test(text);
-        if(text.length>180&&!blocked)return {...x,text:text.slice(0,9000),readStatus:"page-read"};
-        return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
-      }catch{return {...x,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
+        if(text.length>180&&!blocked)return {...x,searchSnippet:snippet,text:text.slice(0,9000),readStatus:"page-read"};
+        return {...x,searchSnippet:snippet,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"};
+      }catch{return {...x,searchSnippet:snippet,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
     }));
     const terms=(queryVariants(query)[1]||query).toLowerCase().match(/[a-z0-9]{4,}/g)||[];
     const relevantPages=pages.filter(x=>{
       if(!terms.length)return true;
-      const content=(String(x.title||"")+" "+String(x.text||"")).toLowerCase();
+      const content=(String(x.title||"")+" "+String(x.searchSnippet||x.text||"")).toLowerCase();
       const matches=terms.filter(term=>content.includes(term.slice(0,Math.max(4,term.length-2)))).length;
       return matches>=Math.min(2,terms.length);
     });
