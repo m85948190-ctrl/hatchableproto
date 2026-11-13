@@ -128,7 +128,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : "Preparing the shared Qwen2.5-Coder Q4_K_M model"});
     enginePromise = (async () => {
-      const mod = await import("/kai51-local-engine.js?v=113");
+      const mod = await import("/kai51-local-engine.js?v=114");
       const create = mod.createKai51Engine;
       if (typeof create !== "function") throw new Error("The shared Qwen2.5-Coder local engine is missing.");
       engine = await create({
