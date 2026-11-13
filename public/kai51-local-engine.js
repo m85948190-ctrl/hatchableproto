@@ -8,70 +8,61 @@ const MODEL_CACHE_NAME = "haxbro-kai51-model-cache-v1";
 const MODEL_CACHE_KEY = "/__haxbro_model_cache__/qwen25-coder-05b-q4km.gguf";
 
 async function downloadOrRestoreModel(report) {
-  let cache = null;
-  let cacheKey = null;
-  try {
-    if (globalThis.caches?.open) {
-      cache = await caches.open(MODEL_CACHE_NAME);
-      cacheKey = new Request(new URL(MODEL_CACHE_KEY, location.origin).href);
-      const saved = await cache.match(cacheKey);
-      if (saved) {
-        const blob = await saved.blob();
-        if (blob.size === MODEL_SIZE) {
-          report(88, "Restored the complete Qwen2.5-Coder model from this browser's saved cache");
-          return blob;
-        }
-        await cache.delete(cacheKey);
+  const run = async () => {
+    let cache = null;
+    try { if (globalThis.caches?.open) cache = await caches.open(MODEL_CACHE_NAME); } catch {}
+    const chunkSize = 16 * 1024 * 1024;
+    const chunkCount = Math.ceil(MODEL_SIZE / chunkSize);
+    const chunks = [];
+    let loaded = 0;
+    for (let index = 0; index < chunkCount; index++) {
+      const start = index * chunkSize;
+      const end = Math.min(MODEL_SIZE - 1, start + chunkSize - 1);
+      const expected = end - start + 1;
+      const key = new Request(new URL(MODEL_CACHE_KEY + "?part=" + index, location.origin).href);
+      let part = null;
+      if (cache) {
+        try {
+          const saved = await cache.match(key);
+          if (saved) {
+            const blob = await saved.blob();
+            if (blob.size === expected) part = blob;
+            else await cache.delete(key);
+          }
+        } catch {}
       }
+      if (!part) {
+        let lastError = null;
+        for (let attempt = 1; attempt <= 3 && !part; attempt++) {
+          try {
+            report(Math.min(86, 4 + loaded / MODEL_SIZE * 82), "Downloading model chunk " + (index + 1) + " of " + chunkCount + " · " + Math.round(loaded / 1048576) + " MB saved");
+            const response = await fetch(MODEL_URL, {mode:"cors",credentials:"omit",cache:"no-store",headers:{Range:"bytes=" + start + "-" + end}});
+            if (response.status !== 206) throw new Error("Model chunk HTTP " + response.status + " (expected 206)");
+            const range = response.headers.get("content-range") || "";
+            if (!range.startsWith("bytes " + start + "-" + end + "/")) throw new Error("Model server returned an unexpected byte range: " + range);
+            const data = await response.arrayBuffer();
+            if (data.byteLength !== expected) throw new Error("Short model chunk: received " + data.byteLength + " of " + expected + " bytes");
+            part = new Blob([data],{type:"application/octet-stream"});
+            if (cache) {
+              try { await cache.put(key, new Response(data,{status:200,headers:{"content-type":"application/octet-stream","content-length":String(expected)}})); } catch {}
+            }
+          } catch (error) {
+            lastError = error;
+            if (attempt < 3) await new Promise(resolve=>setTimeout(resolve,500*attempt));
+          }
+        }
+        if (!part) throw new Error("Could not download model chunk " + (index + 1) + ": " + String(lastError?.message || lastError || "network error"));
+      }
+      chunks.push(part);
+      loaded += expected;
+      report(Math.min(88, 4 + loaded / MODEL_SIZE * 84), "Qwen2.5-Coder download · " + Math.round(loaded / 1048576) + " / " + Math.round(MODEL_SIZE / 1048576) + " MB");
     }
-  } catch (error) {
-    report(4, "Checking browser model cache; preparing a fresh download");
-  }
-
-  report(4, "Downloading Qwen2.5-Coder 0.5B directly to the browser's persistent model cache");
-  const response = await fetch(MODEL_URL, {mode:"cors",credentials:"omit",cache:"no-store"});
-  if (!response.ok) throw new Error("Qwen2.5-Coder download HTTP " + response.status);
-  const total = Number(response.headers.get("content-length")) || MODEL_SIZE;
-  if (response.status !== 200) throw new Error("Model download returned HTTP " + response.status + " instead of a complete file");
-  let cacheWrite = Promise.resolve(false);
-  let modelStream = response.body;
-  if (modelStream?.tee) {
-    const branches = modelStream.tee();
-    modelStream = branches[1];
-    if (cache && cacheKey) {
-      cacheWrite = cache.put(cacheKey, new Response(branches[0], {
-        status:200,
-        headers:{"content-type":"application/octet-stream","content-length":String(total)}
-      })).then(()=>true).catch(()=>false);
-    }
-  }
-  const chunks = [];
-  let loaded = 0;
-  if (modelStream?.getReader) {
-    const reader = modelStream.getReader();
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      chunks.push(part.value);
-      loaded += part.value.byteLength;
-      report(Math.min(86, 4 + loaded / total * 82), "Downloading Qwen2.5-Coder · " + Math.round(loaded / 1048576) + " / " + Math.round(total / 1048576) + " MB");
-    }
-  } else {
-    const blob = await response.blob();
-    chunks.push(blob);
-    loaded = blob.size;
-  }
-  const modelBlob = new Blob(chunks,{type:"application/octet-stream"});
-  if (!modelBlob.size || modelBlob.size !== total) {
-    throw new Error("Incomplete Qwen2.5-Coder download: received " + modelBlob.size + " of " + total + " bytes. Retry the download.");
-  }
-  const cached = await cacheWrite;
-  if (cached) {
-    report(88, "Qwen2.5-Coder download saved for reuse on this device");
-  } else {
-    report(88, "Model downloaded for this session; persistent browser caching was unavailable");
-  }
-  return modelBlob;
+    if (loaded !== MODEL_SIZE) throw new Error("Incomplete Qwen2.5-Coder model: " + loaded + " of " + MODEL_SIZE + " bytes");
+    report(88, "All model chunks are saved; assembling the local Q4_K_M model");
+    return new Blob(chunks,{type:"application/octet-stream"});
+  };
+  if (globalThis.navigator?.locks?.request) return navigator.locks.request("haxbro-kai51-qwen25-coder-model-download-v1",{mode:"exclusive"},run);
+  return run();
 }
 
 export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
