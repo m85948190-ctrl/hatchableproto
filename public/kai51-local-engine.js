@@ -101,17 +101,14 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
           n_threads:Math.max(1,Math.min(4,cores-1))
         });
         report(91,"Running the local Coder model self-test");
-        const test = await runtime.createChatCompletion({
-          messages:[
-            {role:"system",content:"You are KAI 51. Reply briefly and clearly."},
-            {role:"user",content:"Say READY."}
-          ],
-          max_tokens:12,
-          temperature:0,
-          top_p:1,
-          stream:false
+        const test = await runtime.createChatCompletion([
+          {role:"system",content:"You are KAI 51. Reply briefly and clearly."},
+          {role:"user",content:"Say READY."}
+        ],{
+          nPredict:12,
+          sampling:{temp:0,top_k:1,top_p:1}
         });
-        const text=String(test?.choices?.[0]?.message?.content||"").trim();
+        const text=String(test||"").trim();
         // This is an inference smoke test, not an exact-phrase grading test.
         // Different valid Qwen tokenizations/template outputs must not block an installed model.
         if(!text) throw new Error("The downloaded Coder model loaded but returned an empty self-test response.");
@@ -151,20 +148,18 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     // Coding answers get a larger but still bounded budget.
     const tokenBudget=isGreeting?24:(isCoding?128:48);
     try {
-      const work=runtime.createChatCompletion({
-        messages:[
-          {role:"system",content:"You are KAI 51, a helpful local AI assistant. Answer directly, naturally and clearly. Be concise. Never claim an action you did not perform."},
-          {role:"user",content:directPrompt}
-        ],
-        max_tokens:tokenBudget,
-        temperature:options.temperature??0.35,
-        top_p:options.topP??0.9,
-        stream:false
+      const work=runtime.createChatCompletion([
+        {role:"system",content:"You are KAI 51, a helpful local AI assistant. Answer directly, naturally and clearly. Be concise. Never claim an action you did not perform."},
+        {role:"user",content:directPrompt}
+      ],{
+        nPredict:tokenBudget,
+        sampling:{temp:options.temperature??0.35,top_k:32,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08},
+        useCache:true
       });
       const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 180 seconds. The local model did not finish within the device inference limit."));},180000);});
       const result=await Promise.race([work,timeout]);
       ensureActive(options.signal);
-      const raw=typeof result==="string"?result:(result?.choices?.[0]?.message?.content??result?.response??result?.text??result?.content??result?.message??"");
+      const raw=typeof result==="string"?result:(result?.response??result?.text??result?.content??result?.message??"");
       const response=String(raw||"").replace(/<\|im_end\|>|<\|im_start\|>assistant/gi,"").replace(/<think>[\s\S]*?<\/think>/gi,"").trim();
       if(!response) throw new Error(MODEL+" returned an empty response from local inference.");
       return {response,provider:MODEL+" · local Wllama inference",model:MODEL,modelId:MODEL_ID,device:"wasm",local:true,localModel:true,lane:"qwen25-coder",quantization:"Q4_K_M"};
