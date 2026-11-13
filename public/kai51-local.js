@@ -454,8 +454,14 @@
     }
 
     hooks.onStage?.("thinking",MODEL + " is preparing a direct answer");
-    const first = await neural.generate(buildPrompt(text,history),history,{
-      signal:hooks.signal,maxTokens:420,temperature:0.45,topP:0.9
+    // Keep ordinary turns on the prototype's compact prompt path.
+    // Large project-memory/history wrappers caused excessive prefill latency
+    // on low-power browser WASM devices before the model could emit a token.
+    const compactPrompt = "You are KAI 51, a helpful AI assistant. Reply directly and naturally. Be concise. " +
+      (codeRequest ? "For coding requests, provide correct runnable code. " : "") +
+      "\nUser: " + text;
+    const first = await neural.generate(compactPrompt,history,{
+      signal:hooks.signal,maxTokens:48,temperature:0.35,topP:0.9
     });
     let toolCall = parseToolCall(first.response);
     const classifierWantsResearch = !arithmetic && !!local?.classify?.(text,history)?.research;
