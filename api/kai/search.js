@@ -175,7 +175,7 @@ async function multiSearch(query,mode="fast"){
   for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length,news.length);i++){
     for(const x of [google[i],bing[i],duckduckgo[i],news[i]])if(x&&!seen.has(x.url)){seen.add(x.url);merged.push(x);}
   }
-  return {links:merged.slice(0,mode==="deep"?15:12),engine:[google.length?"Google Web":"",bing.length?"Bing Web":"",duckduckgo.length?"DuckDuckGo Instant Answers":"",news.length?"Google News":""].filter(Boolean).join(" + ")||"No web search engine returned results",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length,news:news.length}};
+  return {links:merged.slice(0,mode==="deep"?15:12),engine:[google.length?"Google Web":"",bing.length?"Bing Web":"",duckduckgo.length?"DuckDuckGo Web":"",news.length?"Google News":""].filter(Boolean).join(" + ")||"No web search engine returned results",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length,news:news.length}};
 }
 
 async function ddgSearch(query){
@@ -303,11 +303,11 @@ export default async function(req,res){
       const matches=terms.filter(term=>content.includes(term.slice(0,Math.max(4,term.length-2)))).length;
       return matches>=Math.min(2,terms.length);
     });
-    const combined=[...relevantPages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>x.text||x.title);
+    const combined=[...relevantPages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>(x.text||x.title)&&["page-read","wikipedia-article","wikipedia-summary"].includes(x.readStatus));
     const seen=new Set();
     const sources=combined.filter(x=>{
       let host="";
-      try{host=new URL(x.url).hostname.replace(/^www\\./i,"").toLowerCase();}catch{}
+      try{host=new URL(x.url).hostname.replace(/^www[.]/i,"").toLowerCase();}catch{}
       if(!host||seen.has(host))return false;
       seen.add(host);return true;
     }).slice(0,take);
