@@ -302,7 +302,11 @@ export default async function(req,res){
       if(!terms.length)return true;
       const content=(String(x.title||"")+" "+String(x.searchSnippet||x.text||"")).toLowerCase();
       const matches=terms.filter(term=>content.includes(term.slice(0,Math.max(4,term.length-2)))).length;
-      return matches>=Math.min(2,terms.length);
+      // Search engines already rank the candidate pages. For long natural-language
+      // questions, one strong topic-term match is enough to keep a relevant page;
+      // the old fixed two-term gate discarded useful proofs and technical sources.
+      const required=terms.length>=5?1:Math.min(2,terms.length);
+      return matches>=required;
     });
     const combined=[...relevantPages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>(x.text||x.title)&&["page-read","wikipedia-article","wikipedia-summary"].includes(x.readStatus));
     const seen=new Set();
