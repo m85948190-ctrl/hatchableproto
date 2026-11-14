@@ -137,14 +137,16 @@ async function multiSearch(query,mode="fast"){
   // One real query is sent concurrently to independent engines; query expansion
   // and Wikipedia are intentionally omitted from this latency-critical path.
   const providerTimeout=3800;
+  const variants=queryVariants(query);
+  const searchQuery=(variants[1]&&variants[1].length>=12)?variants[1]:query;
   const guarded=async task=>{
     try{return await Promise.race([task(),new Promise(resolve=>setTimeout(()=>resolve([]),providerTimeout))]);}
     catch{return [];}
   };
   const [googleResults,bingResults,ddgResults,newsResults]=await Promise.all([
-    guarded(()=>googleSearch(query)),
-    guarded(()=>bingSearch(query)),
-    guarded(()=>ddgSearch(query)),
+    guarded(()=>googleSearch(searchQuery)),
+    guarded(()=>bingSearch(searchQuery)),
+    guarded(()=>ddgSearch(searchQuery)),
     guarded(()=>googleNewsSearch(query))
   ]);
   const terms=[...new Set((query.match(/[a-z0-9]{3,}/gi)||[]).map(x=>x.toLowerCase()).filter(x=>!["what","when","where","which","who","whom","whose","why","how","does","the","and","for","with","from","about","please","explain","latest","current","today","news","release","released"].includes(x)))];
