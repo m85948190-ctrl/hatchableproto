@@ -147,7 +147,7 @@ async function multiSearch(query,mode="fast"){
     guarded(()=>googleSearch(searchQuery)),
     guarded(()=>bingSearch(searchQuery)),
     guarded(()=>ddgSearch(searchQuery)),
-    guarded(()=>googleNewsSearch(query))
+    guarded(()=>googleNewsSearch(searchQuery))
   ]);
   const terms=[...new Set((variants[1]||query).toLowerCase().match(/[a-z0-9]+(?:[.+-][a-z0-9]+)*/g)||[])].filter(term=>term.length>=3&&!["what","when","where","which","who","whom","whose","why","how","does","the","and","for","with","from","about","please","explain","latest","current","today","news","release","released","now","use","using","multiple","real","websites","website","read","reading","relevant","pages","page","cite","cited","links","link","search","sources","source"].includes(term));
   const collect=(rows,engine,limit)=> (rows||[]).filter(x=>{
