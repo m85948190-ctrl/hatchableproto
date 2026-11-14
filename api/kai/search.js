@@ -279,8 +279,13 @@ export default async function(req,res){
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
       const snippet=clean(x.text||"",1400);
       try{
-        const timeout=3200;
-        const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
+        const controller=new AbortController();
+        const timer=setTimeout(()=>controller.abort(),2500);
+        let html="";
+        try{
+          const response=await fetch(x.url,{signal:controller.signal,headers:{"user-agent":"Mozilla/5.0 (compatible; HAxBROResearch/1.0)","accept":"text/html,application/xhtml+xml"}});
+          if(response.ok)html=await response.text();
+        }finally{clearTimeout(timer)}
         const text=pageText(html);
         const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden|wikimedia error|too many requests|error 429|http 429|rate limit|complete the following challenge|select all squares|human verification|protection\. privacy|donor privacy policy|please donate|support wikipedia|wikipedia.{0,100}(?:donat|fundrais)|(?:donat|fundrais).{0,100}wikipedia/i.test(text);
         if(text.length>180&&!blocked)return {...x,searchSnippet:snippet,text:text.slice(0,9000),readStatus:"page-read"};
