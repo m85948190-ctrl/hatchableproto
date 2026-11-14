@@ -147,7 +147,13 @@ async function multiSearch(query,mode="fast"){
     guarded(()=>ddgSearch(query)),
     guarded(()=>googleNewsSearch(query))
   ]);
-  const collect=(rows,engine,limit)=> (rows||[]).filter(x=>x?.url).slice(0,limit).map(x=>({...x,engine}));
+  const terms=[...new Set((query.match(/[a-z0-9]{3,}/gi)||[]).map(x=>x.toLowerCase()).filter(x=>!["what","when","where","which","who","whom","whose","why","how","does","the","and","for","with","from","about","please","explain","latest","current","today","news","release","released"].includes(x)))];
+  const collect=(rows,engine,limit)=> (rows||[]).filter(x=>{
+    if(!x?.url)return false;
+    if(!terms.length)return true;
+    const hay=(String(x.title||"")+" "+String(x.text||"")+" "+String(x.url||"")).toLowerCase();
+    return terms.some(term=>hay.includes(term));
+  }).slice(0,limit).map(x=>({...x,engine}));
   const google=collect(googleResults,"Google Web",4);
   const bing=collect(bingResults,"Bing Web",5);
   const duckduckgo=collect(ddgResults,"DuckDuckGo Web",6);
