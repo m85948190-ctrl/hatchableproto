@@ -140,13 +140,15 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     const abort=()=>{try{runtime?.interrupt?.();}catch{}};
     options.signal?.addEventListener?.("abort",abort,{once:true});
     let timer;
-    const userText=directPrompt.split(/\nUSER:\s*/).pop().trim();
+    const userText=directPrompt.split(/\nUSER:\s*/i).pop().trim();
     const isGreeting=/^(?:hi|hey|hello|yo|sup|good morning|good evening|good afternoon)(?:\s+bro)?[!. ]*$/i.test(userText);
     const isCoding=/\b(?:code|coding|program|script|function|class|debug|html|css|javascript|python|typescript|sql|api)\b/i.test(userText);
-    // Keep ordinary turns short on CPU-only devices; the prototype's
-    // fast path was a compact single-turn completion, not a long essay run.
-    // Coding answers get a larger but still bounded budget.
-    const tokenBudget=isGreeting?24:(isCoding?128:48);
+    // Respect the caller's task-specific budget. Research/coding callers need
+    // enough room to explain evidence; the ordinary chat path remains compact.
+    const requestedBudget=Number(options.maxTokens);
+    const tokenBudget=Number.isFinite(requestedBudget)&&requestedBudget>0
+      ? Math.min(384,Math.max(16,Math.floor(requestedBudget)))
+      : (isGreeting?24:(isCoding?192:64));
     try {
       const work=runtime.createChatCompletion([
         {role:"system",content:"You are KAI 51, a helpful local AI assistant. Answer directly, naturally and clearly. Be concise. Never claim an action you did not perform."},

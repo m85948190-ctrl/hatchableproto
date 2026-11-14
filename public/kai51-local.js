@@ -128,7 +128,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : "Preparing the shared Qwen2.5-Coder Q4_K_M model"});
     enginePromise = (async () => {
-      const mod = await import("/kai51-local-engine.js?v=118");
+      const mod = await import("/kai51-local-engine.js?v=119");
       const create = mod.createKai51Engine;
       if (typeof create !== "function") throw new Error("The shared Qwen2.5-Coder local engine is missing.");
       engine = await create({
@@ -280,10 +280,10 @@
     const requestedUrl = (text.match(/https?:\/\/[^\s<>"']+/i) || [""])[0].replace(/[),.;!?]+$/,"");
     const explicitBrowse = !!requestedUrl && /\b(open|browse|read|summari[sz]e|visit|review|look at|check this page|what is on this page)\b/i.test(text);
     const classifiedResearch = !arithmetic && !!local?.classify?.(text,history)?.research;
-    const greeting = /^(?:hi|hey|hello|yo|sup|wtf|thanks|thank you|good morning|good afternoon|good evening)(?:\\s+bro)?[!.? ]*$/i.test(text);
-    const codeRequest = /\\b(?:code|coding|program|programming|script|debug|function|class|javascript|typescript|python|html|css|sql|api|algorithm|compile|runtime error)\\b/i.test(text);
-    const creativeRequest = /\\b(?:write|draft|compose|brainstorm|imagine|invent|story|poem|joke|roleplay)\\b/i.test(text) && !/\\b(?:who|what|when|where|why|how|explain|compare|latest|current|search|sources?)\\b/i.test(text);
-    const knowledgeQuestion = /[?]\\s*$/.test(text) || /^(?:what|who|when|where|why|how|which|explain|define|compare|difference|tell me about|is it true|can you explain)\\b/i.test(text);
+    const greeting = /^(?:hi|hey|hello|yo|sup|wtf|thanks|thank you|good morning|good afternoon|good evening)(?:\s+bro)?[!.? ]*$/i.test(text);
+    const codeRequest = /\b(?:code|coding|program|programming|script|debug|function|class|javascript|typescript|python|html|css|sql|api|algorithm|compile|runtime error)\b/i.test(text);
+    const creativeRequest = /\b(?:write|draft|compose|brainstorm|imagine|invent|story|poem|joke|roleplay)\b/i.test(text) && !/\b(?:who|what|when|where|why|how|explain|compare|latest|current|search|sources?)\b/i.test(text);
+    const knowledgeQuestion = /[?]\s*$/.test(text) || /^(?:what|who|when|where|why|how|which|explain|define|compare|difference|tell me about|is it true|can you explain)\b/i.test(text);
     const wantsWeb = !arithmetic && (explicitSearch(text) || explicitBrowse || classifiedResearch || (knowledgeQuestion && !greeting && !codeRequest && !creativeRequest));
     let utility = null;
     let research = null;
@@ -462,9 +462,9 @@
     // on low-power browser WASM devices before the model could emit a token.
     const compactPrompt = "You are KAI 51, a helpful AI assistant. Reply directly and naturally. Be concise. " +
       (codeRequest ? "For coding requests, provide correct runnable code. " : "") +
-      "\nUser: " + text;
+      "\nUSER: " + text;
     const first = await neural.generate(compactPrompt,history,{
-      signal:hooks.signal,maxTokens:48,temperature:0.35,topP:0.9
+      signal:hooks.signal,maxTokens:greeting?24:(codeRequest?192:64),temperature:0.35,topP:0.9
     });
     let toolCall = parseToolCall(first.response);
     const classifierWantsResearch = !arithmetic && !!local?.classify?.(text,history)?.research;

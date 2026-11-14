@@ -43,7 +43,7 @@ function queryVariants(query){
   const q=clean(query,700).trim();
   if(!q)return [];
   const stop=new Set(["what","when","where","which","why","who","how","is","are","was","were","the","a","an","and","or","for","to","of","in","on","at","by","with","from","about","please","tell","me","explain","define","describe","show","give","can","could","would","should","does","do","did","search","web","sources","latest","current","today","recent","information","info"]);
-  const tokens=q.match(/[\\p{L}\\p{N}][\\p{L}\\p{N}.'+-]*/gu)||[];
+  const tokens=q.match(/[\p{L}\p{N}][\p{L}\p{N}.'+-]*/gu)||[];
   const core=tokens.filter(token=>!stop.has(token.toLowerCase()));
   const concise=core.join(" ").trim();
   const compact=core.slice(0,5).join(" ").trim();
