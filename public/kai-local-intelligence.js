@@ -1,14 +1,25 @@
 (() => {
   /* KAI 51 LOCAL: fast evidence retrieval + neural conversation.
      This file routes and gathers evidence; it must not fabricate a response from phrase rules. */
-  const VERSION='kai51-local-evidence-synthesis-v20-single-research-pipeline';
+  const VERSION='kai51-local-evidence-synthesis-v21-context-aware-research';
   const clean=(v,n=9000)=>String(v??'').replace(/\u0000/g,'').trim().slice(0,n);
   const words=s=>clean(s,5000).toLowerCase().split(/\s+/).filter(Boolean);
 
-  function queryFor(message){
-    const original=clean(message);
+  function queryFor(message,history=[]){
+    const evidenceFollowup=/\b(?:how do you know|how can you tell|what is your evidence|what's your evidence|where did you get that|where did that come from|sources? for that|prove (?:it|that)|back that up|verify that claim)\b/i.test(clean(message,1000));
+    let original=clean(message);
+    if(evidenceFollowup&&Array.isArray(history)){
+      const prior=history.slice(0,-1).reverse().find(item=>{
+        const role=String(item?.who||item?.role||item?.sender||'').toLowerCase();
+        const content=String(item?.text||item?.content||item?.message||'').trim();
+        return /^(?:user|human)$/.test(role)&&content&&content.toLowerCase()!==clean(message,1000).toLowerCase();
+      });
+      if(prior)original=clean(prior.text||prior.content||prior.message,1000);
+    }
+    original=original.replace(/^\s*(?:ok(?:ay)?\s+)?(?:serch|seach|search)\s+(?:the\s+)?web\s*(?:and\s+)?/i,'');
     let q=original
       .replace(/^\s*(?:please\s+)?(?:can you|could you|would you|tell me|explain|help me)\s+/i,'')
+      .replace(/^\s*(?:that\s+)?(?:is|whether)\s+/i,'')
       .replace(/^\s*(?:what causes|what caused|what makes|what made|what is|what are|who is|who are|where is|where are|when did|when was|why does|why do|why is|why are|how does|how do|how is|how are)\s+/i,'')
       .replace(/\s+(?:and\s+)?(?:why|how)\s+(?:do|does|did|is|are|can|could|would|will)\s+(?:he|she|it|they|we|you|plants|batteries|the|this|that)\b[\s\S]*$/i,' ')
       .replace(/\b(?:explain it simply|explain simply|in simple terms|in simple words|briefly|please)\b/ig,' ')
@@ -57,6 +68,8 @@
   // Conversational memory recall is handled by the neural model using userMemoryPrompt().
   // Source extraction is not a final answer: the retrieved evidence always goes to the neural synthesizer.
 
+  function isEvidenceFollowup(message){return /\b(?:how do you know|how can you tell|what is your evidence|what's your evidence|where did you get that|where did that come from|sources? for that|prove (?:it|that)|back that up|verify that claim)\b/i.test(clean(message,1200));}
+
   function isConversationalFollowup(message,history=[]){
     const t=clean(message,1200).toLowerCase();
     if(/\b(?:why are you asking me|why did you ask me|why do you keep asking|why are you repeating|what did i just say|i just said|you just asked|you asked me|your last answer|your previous answer|what do you mean by that|why did you say that|that doesn't answer|you ignored what i said)\b/i.test(t)) return true;
@@ -69,6 +82,10 @@
 
   function shouldSearch(message,history=[]){
     const t=clean(message).toLowerCase();
+    // Evidence challenges must retrieve the topic discussed in the previous turn.
+    if(isEvidenceFollowup(t)) return true;
+    // Emotional reactions to the last reply are conversation, not search queries.
+    if(/^(?:what the hell|wtf|why bro|what the hell why bro|why the hell)[!? .]*$/i.test(t)&&Array.isArray(history)&&history.length>1) return false;
     // Conversational references belong to the ongoing dialogue, not the web-search lane.
     if(isConversationalFollowup(t,history)) return false;
     if(/^\s*(?:please\s+)?(?:remember|forget)\b/i.test(t)) return false;
@@ -76,7 +93,7 @@
     if(/^(?:hi|hello|hey|yo|good morning|good afternoon|good evening|thanks|thank you|thx|ok|okay|sure|yes|yeah|yep|no|nah|got it)[!. ]*$/i.test(t)) return false;
     if(/^(?:how are you|what'?s up|what are you doing|are you there|who are you|what(?:'s| is) your name|what can you do|what do you think|can we talk|let'?s talk|can you help me)[?.! ]*$/i.test(t)) return false;
     if(/\b(?:what do you remember about me|what answer style do i prefer|my name is|call me|i prefer|i like|i feel|i'm bored|i am bored|rough day|bad day|need someone to talk)\b/i.test(t)) return false;
-    return /\b(?:explain|define|compare|contrast|analy[sz]e|investigate|research|look up|find out|verify|check|search|wikipedia|web\s?page|webpage|tell me about|teach me|describe|overview|latest|recent|today|news|price|cost|version|release|update|current|weather|according to|statistics|study|paper|official|history|fact|facts|population|capital|meaning|evidence|source|what is|what are|what causes|causes|who is|who are|where is|where are|when did|when was|why did|why does|why do|why is|why are|how to|how can|how does|how do|how is|how are)\b/i.test(t);
+    return /\b(?:explain|define|compare|comparison|contrast|versus|vs\.?|better(?: than| or)?|worse(?: than)?|which is better|pros and cons|analy[sz]e|investigate|research|look up|find out|verify|check|search|serch|seach|wikipedia|web\s?page|webpage|tell me about|teach me|describe|overview|latest|recent|today|news|price|cost|version|release|update|current|weather|according to|statistics|study|paper|official|history|fact|facts|population|capital|meaning|evidence|source|what is|what are|what causes|causes|who is|who are|where is|where are|when did|when was|why did|why does|why do|why is|why are|how to|how can|how does|how do|how is|how are)\b/i.test(t);
   }
 
   async function searchWeb(query,mode='fast',signal){

@@ -578,7 +578,7 @@ async function kai51WorkspaceRoute(value){
     }
     try{
       kaiActivityStep('thinking','KAI 51 · thinking','Understanding your message','','running');kaiActivityStep('language','Language layer','Detecting language and communication mode locally','','done');
-      const chatController=activeChatController||new AbortController();const chatLimit=opts.searchMode==='quick'?15000:opts.searchMode==='deep'?90000:30000;const chatTimer=setTimeout(()=>chatController.abort(),chatLimit);const rr=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:chatController.signal,body:JSON.stringify({
+      const chatController=activeChatController||new AbortController();const chatLimit=opts.searchMode==='quick'?80000:opts.searchMode==='deep'?130000:90000;const chatTimer=setTimeout(()=>chatController.abort(),chatLimit);const rr=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:chatController.signal,body:JSON.stringify({
         message:value,
         searchMode:opts.searchMode||'normal',
         kaiMode,

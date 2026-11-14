@@ -1,7 +1,7 @@
 (() => {
-  const VERSION = "kai51-qwen25-coder-05b-gguf-v1";
+  const VERSION = "kai51-qwen25-coder-05b-gguf-v2";
   const MODEL = "Qwen2.5-Coder-0.5B-Instruct";
-  const ENGINE_VERSION = "wllama-2.3.7-q4-k-m-v1";
+  const ENGINE_VERSION = "wllama-2.3.7-q4-k-m-v2";
   // Model weights and installation state belong to this browser/device, not
   // to an individual local username. All HAxBRO profiles reuse one model cache.
   const KEY = () => "haxbro:kai51:shared-qwen25-coder-05b-q4km:v1";
@@ -97,7 +97,27 @@
     return value ? {name,[key]:value} : null;
   }
   function explicitSearch(message) {
-    return /\b(search (the )?web|search online|look up online|browse the web|find sources|web research|wikipedia|web ?page|webpage|latest|today|right now|current news|breaking news|verify online|fact.?check)\b/i.test(String(message || ""));
+    return /\b(?:search (?:the )?web|serch (?:the )?web|seach (?:the )?web|search online|look up online|browse the web|find sources|web research|wikipedia|web ?page|webpage|latest|today|right now|current news|breaking news|verify online|fact.?check)\b/i.test(String(message || ""));
+  }
+  function researchQueryFor(message,history=[]) {
+    const text=String(message||"").trim();
+    const evidenceFollowup=/\b(?:how do you know|how can you tell|what is your evidence|what's your evidence|where did you get that|where did that come from|sources? for that|prove (?:it|that)|back that up|verify that claim)\b/i.test(text);
+    let query=text;
+    if(evidenceFollowup&&Array.isArray(history)){
+      const prior=history.slice(0,-1).reverse().find(item=>{
+        const role=String(item?.who||item?.role||item?.sender||"").toLowerCase();
+        const content=String(item?.text||item?.content||item?.message||"").trim();
+        return /^(?:user|human)$/.test(role)&&content&&content.toLowerCase()!==text.toLowerCase();
+      });
+      if(prior)query=String(prior.text||prior.content||prior.message||"");
+    }
+    query=query.replace(/^\s*(?:ok(?:ay)?\s+)?(?:serch|seach|search)\s+(?:the\s+)?web\s*(?:and\s+)?/i,"")
+      .replace(/^\s*(?:tell me|show me)\s+(?:that\s+)?/i,"")
+      .replace(/^\s*(?:that\s+)?(?:is|whether)\s+/i,"").trim();
+    const comparison=/\b(?:grok|chatgpt|claude|gemini|deepseek|copilot)\b/i.test(query)&&/\b(?:better|best|versus|vs\.?|compare|comparison|stronger|faster|smarter)\b/i.test(query);
+    if(comparison&&!/\b(?:benchmark|independent|evaluation|evidence)\b/i.test(query))query+=" latest model comparison independent benchmarks reasoning coding factual accuracy web search";
+    if(evidenceFollowup)query+=" independent evidence and sources verifying the comparison";
+    return query.replace(/\s+/g," ").trim().slice(0,500);
   }
   function isArithmetic(message) {
     const value=String(message||"");
@@ -128,7 +148,7 @@
       ? "Restoring the installed " + MODEL + " from this browser's persistent model cache"
       : "Preparing the shared Qwen2.5-Coder Q4_K_M model"});
     enginePromise = (async () => {
-      const mod = await import("/kai51-local-engine.js?v=120");
+      const mod = await import("/kai51-local-engine.js?v=121");
       const create = mod.createKai51Engine;
       if (typeof create !== "function") throw new Error("The shared Qwen2.5-Coder local engine is missing.");
       engine = await create({
@@ -284,7 +304,10 @@
     const codeRequest = /\b(?:code|coding|program|programming|script|debug|function|class|javascript|typescript|python|html|css|sql|api|algorithm|compile|runtime error)\b/i.test(text);
     const creativeRequest = /\b(?:write|draft|compose|brainstorm|imagine|invent|story|poem|joke|roleplay)\b/i.test(text) && !/\b(?:who|what|when|where|why|how|explain|compare|latest|current|search|sources?)\b/i.test(text);
     const knowledgeQuestion = /[?]\s*$/.test(text) || /^(?:what|who|when|where|why|how|which|explain|define|compare|difference|tell me about|is it true|can you explain)\b/i.test(text);
-    const wantsWeb = !arithmetic && (explicitSearch(text) || explicitBrowse || classifiedResearch || (knowledgeQuestion && !greeting && !codeRequest && !creativeRequest));
+    const comparisonQuestion=/\b(?:better(?: than| or)?|worse(?: than)?|which is better|versus|vs\.?|compare|comparison|pros and cons)\b/i.test(text)&&/\b(?:grok|chatgpt|claude|gemini|deepseek|copilot)\b/i.test(text);
+    const evidenceFollowup=/\b(?:how do you know|how can you tell|what is your evidence|what's your evidence|where did you get that|where did that come from|sources? for that|prove (?:it|that)|back that up|verify that claim)\b/i.test(text);
+    const wantsWeb = !arithmetic && (explicitSearch(text) || explicitBrowse || classifiedResearch || comparisonQuestion || evidenceFollowup || (knowledgeQuestion && !greeting && !codeRequest && !creativeRequest));
+    const researchQuery=researchQueryFor(text,history);
     let utility = null;
     let research = null;
 
@@ -297,7 +320,7 @@
       try {
         research = explicitBrowse
           ? await browseWeb(requestedUrl,hooks)
-          : await searchWeb(text,hooks);
+          : await searchWeb(researchQuery,hooks);
         hooks.onStage?.("web-search-done",(research.sources||[]).length+" source(s) collected in the first research pass.");
       } catch (error) {
         if (hooks.signal?.aborted) throw error;
@@ -359,11 +382,11 @@
 
     if (wantsWeb) {
       const activeSources=Array.isArray(research?.sources)?research.sources:[];
-      const groundedEvidence=String(research?.evidence||"").slice(0,1200);
+      const groundedEvidence=String(research?.evidence||"").slice(0,3200);
       hooks.onSources?.(activeSources.map(({title,url,source,readStatus})=>({title,url,source,readStatus})));
       hooks.onStage?.("ai-reading",MODEL+" is reading and comparing "+activeSources.length+" retrieved webpages before writing the answer.");
       const groundedAnswer=await neural.generate(buildPrompt(text,history,groundedEvidence),history,{
-        signal:hooks.signal,maxTokens:64,temperature:0.2,topP:0.8
+        signal:hooks.signal,maxTokens:160,temperature:0.2,topP:0.85
       });
       if(!groundedAnswer?.response)throw new Error(MODEL+" returned an empty research answer.");
       hooks.onStage?.("composing",MODEL+" completed the source-grounded summary.");
@@ -460,11 +483,9 @@
     // Keep ordinary turns on the prototype's compact prompt path.
     // Large project-memory/history wrappers caused excessive prefill latency
     // on low-power browser WASM devices before the model could emit a token.
-    const compactPrompt = "You are KAI 51, a helpful AI assistant. Reply directly and naturally. Be concise. " +
-      (codeRequest ? "For coding requests, provide correct runnable code. " : "") +
-      "\nUSER: " + text;
+    const compactPrompt = buildPrompt(text,history);
     const first = await neural.generate(compactPrompt,history,{
-      signal:hooks.signal,maxTokens:greeting?24:(codeRequest?192:64),temperature:0.35,topP:0.9
+      signal:hooks.signal,maxTokens:greeting?24:(codeRequest?192:96),temperature:0.35,topP:0.9
     });
     let toolCall = parseToolCall(first.response);
     const classifierWantsResearch = !arithmetic && !!local?.classify?.(text,history)?.research;

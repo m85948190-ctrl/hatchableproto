@@ -270,7 +270,26 @@ export default async function(req,res){
     // Live search is the first operation for factual questions. Do not wait
     // for the separate Wikipedia enrichment lane: provider results are enough
     // to begin reading and synthesizing, and the old lane caused 503 timeouts.
-    const searched=await multiSearch(query,mode);
+    // Reuse HAxBRO's stable multi-provider RSS/HTML search endpoint. The older
+    // inline Google/DDG parsers returned almost no results for ordinary comparisons.
+    const searchController=new AbortController();
+    const searchTimer=setTimeout(()=>searchController.abort(),9000);
+    let searchData={};
+    try{
+      const searchResponse=await fetch("https://haxbro.hatchable.site/api/web-search",{
+        method:"POST",signal:searchController.signal,
+        headers:{"content-type":"application/json","accept":"application/json"},
+        body:JSON.stringify({query,mode,type:/\b(news|latest|today|breaking|recent|release|announced)\b/i.test(query)?"news":"web"})
+      });
+      searchData=await searchResponse.json().catch(()=>({}));
+      if(!searchResponse.ok||!searchData?.ok)throw new Error(searchData?.error||"Multi-provider web search returned HTTP "+searchResponse.status);
+    }finally{clearTimeout(searchTimer)}
+    const resultRows=Array.isArray(searchData.results)?searchData.results:(Array.isArray(searchData.sources)?searchData.sources:[]);
+    const searched={
+      links:resultRows.map(x=>({title:x.title,url:x.url,text:x.snippet||x.text||"",engine:x.provider||x.engine||"Web search",publishedAt:x.publishedAt||null})),
+      engine:searchData.provider||"Multi-provider Web Search",
+      engines:searchData.providers||searchData.engines||{}
+    };
     const wiki=[];
     const links=searched.links||[];
     const take=3;

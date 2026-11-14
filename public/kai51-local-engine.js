@@ -148,17 +148,17 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
     const requestedBudget=Number(options.maxTokens);
     const tokenBudget=Number.isFinite(requestedBudget)&&requestedBudget>0
       ? Math.min(384,Math.max(16,Math.floor(requestedBudget)))
-      : (isGreeting?24:(isCoding?192:64));
+      : (isGreeting?24:(isCoding?160:96));
     try {
       const work=runtime.createChatCompletion([
-        {role:"system",content:"You are KAI 51, a helpful local AI assistant. Answer directly, naturally and clearly. Be concise. Never claim an action you did not perform."},
+        {role:"system",content:"You are KAI 51, a capable conversational assistant. Answer the exact question, use the recent conversation context supplied in the user prompt, and explain your reasoning in plain language. For comparisons, evaluate clear criteria before giving a balanced verdict. If challenged with how you know, state the evidence or admit when a previous answer was unsupported; never double down or invent sources. Never refuse ordinary harmless questions. Never claim an action you did not perform."},
         {role:"user",content:directPrompt}
       ],{
         nPredict:tokenBudget,
         sampling:{temp:options.temperature??0.35,top_k:32,top_p:options.topP??0.9,penalty_repeat:options.repPenalty??1.08},
         useCache:true
       });
-      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 180 seconds. The local model did not finish within the device inference limit."));},180000);});
+      const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{abort();reject(new Error(MODEL+" generation timed out after 60 seconds. The local model did not finish within the device inference limit."));},60000);});
       const result=await Promise.race([work,timeout]);
       ensureActive(options.signal);
       const raw=typeof result==="string"?result:(result?.response??result?.text??result?.content??result?.message??"");
