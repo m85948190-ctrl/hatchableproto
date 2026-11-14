@@ -133,49 +133,30 @@ async function googleNewsSearch(query){
 }
 
 async function multiSearch(query,mode="fast"){
-  const variants=queryVariants(query);
-  // Always fan out across several query variants, even in quick mode, so a
-  // single weak result page cannot leave the user with an empty source panel.
-  const primary=variants.slice(0,Math.max(3,mode==="deep"?3:1));
-  // Run independent web providers and a separate Google News RSS lane. Search
-  // remains useful even when Google/Bing HTML pages block automated requests.
-  // Give each provider its own deadline so one slow engine cannot erase
-  // results already returned by the others. Page extraction runs afterward
-  // in parallel, keeping the normal research path near a 19-second ceiling.
-  const providerTimeout=mode==="deep"?9500:7500;
+  // Keep the live chat search inside Hatchable's short function-execution window.
+  // One real query is sent concurrently to independent engines; query expansion
+  // and Wikipedia are intentionally omitted from this latency-critical path.
+  const providerTimeout=3800;
   const guarded=async task=>{
     try{return await Promise.race([task(),new Promise(resolve=>setTimeout(()=>resolve([]),providerTimeout))]);}
     catch{return [];}
   };
-  const settled=await Promise.all([
-    Promise.all(primary.map(q=>guarded(()=>googleSearch(q)))),
-    Promise.all(primary.map(q=>guarded(()=>bingSearch(q)))),
-    Promise.all(primary.map(q=>guarded(()=>ddgSearch(q)))),
-    Promise.all(primary.map(q=>guarded(()=>googleNewsSearch(q))))
+  const [googleResults,bingResults,ddgResults,newsResults]=await Promise.all([
+    guarded(()=>googleSearch(query)),
+    guarded(()=>bingSearch(query)),
+    guarded(()=>ddgSearch(query)),
+    guarded(()=>googleNewsSearch(query))
   ]);
-  const [googleResults,bingResults,ddgResults,newsResults]=settled||[[],[],[],[]];
-  const collect=(lists,engine,limit)=>{const out=[],seen=new Set();for(const list of lists||[])for(const x of list||[]){if(!x?.url||seen.has(x.url))continue;seen.add(x.url);out.push({...x,engine});if(out.length>=limit)return out;}return out;};
-  const terms=clean(query,500).toLowerCase().match(/[a-z0-9]{4,}/g)||[];
-  const stop=new Set(["what","when","where","which","that","this","with","from","does","have","your","about","into","they","them","their","there","then","than","were","will","would","could","should","also","just","some","more","most","much","many","make","made","work","works","using","used","based","explain","please","tell","show"]);
-  const keyTerms=[...new Set(terms.filter(t=>!stop.has(t)))];
-  const filterRelevant=rows=>rows.filter(x=>{
-    if(!keyTerms.length)return true;
-    const text=(x.title+" "+x.text).toLowerCase();
-    const matches=keyTerms.filter(term=>text.includes(term)).length;
-    // For long, specific queries allow one strong topic match; the provider's
-    // ranking already narrows candidates and a hard 3-term gate hid good pages.
-    const required=keyTerms.length>=7?3:keyTerms.length>=3?2:1;
-    return matches>=required;
-  });
-  const google=filterRelevant(collect(googleResults,"Google Web",6));
-  const bing=filterRelevant(collect(bingResults,"Bing Web",6));
-  const duckduckgo=filterRelevant(collect(ddgResults,"DuckDuckGo Web",8));
-  const news=filterRelevant(collect(newsResults,"Google News",8));
+  const collect=(rows,engine,limit)=> (rows||[]).filter(x=>x?.url).slice(0,limit).map(x=>({...x,engine}));
+  const google=collect(googleResults,"Google Web",4);
+  const bing=collect(bingResults,"Bing Web",5);
+  const duckduckgo=collect(ddgResults,"DuckDuckGo Web",6);
+  const news=collect(newsResults,"Google News",4);
   const merged=[],seen=new Set();
   for(let i=0;i<Math.max(google.length,bing.length,duckduckgo.length,news.length);i++){
     for(const x of [google[i],bing[i],duckduckgo[i],news[i]])if(x&&!seen.has(x.url)){seen.add(x.url);merged.push(x);}
   }
-  return {links:merged.slice(0,mode==="deep"?15:12),engine:[google.length?"Google Web":"",bing.length?"Bing Web":"",duckduckgo.length?"DuckDuckGo Web":"",news.length?"Google News":""].filter(Boolean).join(" + ")||"No web search engine returned results",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length,news:news.length}};
+  return {links:merged.slice(0,10),engine:[google.length?"Google Web":"",bing.length?"Bing Web":"",duckduckgo.length?"DuckDuckGo Web":"",news.length?"Google News":""].filter(Boolean).join(" + ")||"No web search engine returned results",engines:{google:google.length,bing:bing.length,duckduckgo:duckduckgo.length,news:news.length}};
 }
 
 async function ddgSearch(query){
@@ -277,19 +258,19 @@ export default async function(req,res){
   if(!query)return res.status(400).json({error:"query required"});
   const mode=req.body?.mode==="deep"?"deep":"fast";
   try{
-    const freshQuery=/\b(news|latest|today|breaking|recent|this week|this month|announced|announcement|release|released|update|updates)\b/i.test(query);
-    const [searched,wiki]=await Promise.all([
-      multiSearch(query,mode),
-      freshQuery?Promise.resolve([]):wikipediaEvidence(query)
-    ]);
+    // Live search is the first operation for factual questions. Do not wait
+    // for the separate Wikipedia enrichment lane: provider results are enough
+    // to begin reading and synthesizing, and the old lane caused 503 timeouts.
+    const searched=await multiSearch(query,mode);
+    const wiki=[];
     const links=searched.links||[];
-    const take=5;
+    const take=4;
     // Open a small, ranked set of result pages to limit bandwidth. Keep a
     // clearly labelled search-snippet fallback when a publisher blocks reading.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
       const snippet=clean(x.text||"",1400);
       try{
-        const timeout=mode==="deep"?8500:6500;
+        const timeout=1700;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
         const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden|wikimedia error|too many requests|error 429|http 429|rate limit|complete the following challenge|select all squares|human verification|protection\. privacy|donor privacy policy|please donate|support wikipedia|wikipedia.{0,100}(?:donat|fundrais)|(?:donat|fundrais).{0,100}wikipedia/i.test(text);
