@@ -42,7 +42,7 @@ async function googleSearch(query){
 function queryVariants(query){
   const q=clean(query,700).trim();
   if(!q)return [];
-  const stop=new Set(["what","when","where","which","why","who","how","is","are","was","were","the","a","an","and","or","for","to","of","in","on","at","by","with","from","about","please","tell","me","explain","define","describe","show","give","can","could","would","should","does","do","did","search","web","sources","source","latest","current","today","recent","now","stable","use","using","multiple","real","websites","website","read","reading","relevant","pages","page","cite","cited","links","link","information","info"]);
+  const stop=new Set(["what","when","where","which","why","who","how","is","are","was","were","the","a","an","and","or","for","to","of","in","on","at","by","with","from","about","please","tell","me","explain","define","describe","show","give","can","could","would","should","does","do","did","search","web","sources","source","latest","current","today","recent","now","stable","use","using","multiple","real","websites","website","read","reading","relevant","pages","page","cite","cited","citations","citation","concise","answer","answers","summary","summarize","summarise","links","link","information","info"]);
   const tokens=q.match(/[\p{L}\p{N}][\p{L}\p{N}.'+-]*/gu)||[];
   const core=tokens.filter(token=>!stop.has(token.toLowerCase()));
   const concise=core.join(" ").trim();
@@ -149,7 +149,7 @@ async function multiSearch(query,mode="fast"){
     guarded(()=>ddgSearch(searchQuery)),
     guarded(()=>googleNewsSearch(searchQuery))
   ]);
-  const terms=[...new Set((variants[1]||query).toLowerCase().match(/[a-z0-9]+(?:[.+-][a-z0-9]+)*/g)||[])].filter(term=>term.length>=3&&!["what","when","where","which","who","whom","whose","why","how","does","the","and","for","with","from","about","please","explain","latest","current","today","news","release","released","now","use","using","multiple","real","websites","website","read","reading","relevant","pages","page","cite","cited","links","link","search","sources","source"].includes(term));
+  const terms=[...new Set((variants[1]||query).toLowerCase().match(/[a-z0-9]+(?:[.+-][a-z0-9]+)*/g)||[])].filter(term=>term.length>=3&&!["what","when","where","which","who","whom","whose","why","how","does","the","and","for","with","from","about","please","explain","latest","current","today","news","release","released","now","use","using","multiple","real","websites","website","read","reading","relevant","pages","page","cite","cited","links","link","search","sources","source","citations","citation","concise","answer","answers","summary","summarize","summarise"].includes(term));
   const collect=(rows,engine,limit)=> (rows||[]).filter(x=>{
     if(!x?.url)return false;
     if(!terms.length)return true;
