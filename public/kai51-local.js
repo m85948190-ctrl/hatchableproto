@@ -304,7 +304,10 @@
         firstSearchError = String(error?.message||error);
         hooks.onStage?.("web-search-error","First search pass did not return a verified source set: "+firstSearchError);
       }
-    } else {
+    } else if (arithmetic) {
+      // Run the deterministic calculator only for arithmetic. Ordinary conversation
+      // goes straight to the compact neural prompt below; do not force it through
+      // the long retrieval/evidence handoff used for research.
       utility = await getLocalUtility(text,history,hooks);
       if (utility?.response && !utility?.handoff) return {...utility,lane:"local",toolResult:true,combined:true};
     }
