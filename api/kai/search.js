@@ -42,7 +42,7 @@ async function googleSearch(query){
 function queryVariants(query){
   const q=clean(query,700).trim();
   if(!q)return [];
-  const stop=new Set(["what","when","where","which","why","who","how","is","are","was","were","the","a","an","and","or","for","to","of","in","on","at","by","with","from","about","please","tell","me","explain","define","describe","show","give","can","could","would","should","does","do","did","search","web","sources","latest","current","today","recent","information","info"]);
+  const stop=new Set(["what","when","where","which","why","who","how","is","are","was","were","the","a","an","and","or","for","to","of","in","on","at","by","with","from","about","please","tell","me","explain","define","describe","show","give","can","could","would","should","does","do","did","search","web","sources","source","latest","current","today","recent","now","use","using","multiple","real","websites","website","read","reading","relevant","pages","page","cite","cited","links","link","information","info"]);
   const tokens=q.match(/[\p{L}\p{N}][\p{L}\p{N}.'+-]*/gu)||[];
   const core=tokens.filter(token=>!stop.has(token.toLowerCase()));
   const concise=core.join(" ").trim();
@@ -149,12 +149,13 @@ async function multiSearch(query,mode="fast"){
     guarded(()=>ddgSearch(searchQuery)),
     guarded(()=>googleNewsSearch(query))
   ]);
-  const terms=[...new Set((query.match(/[a-z0-9]{3,}/gi)||[]).map(x=>x.toLowerCase()).filter(x=>!["what","when","where","which","who","whom","whose","why","how","does","the","and","for","with","from","about","please","explain","latest","current","today","news","release","released"].includes(x)))];
+  const terms=[...new Set((variants[1]||query).toLowerCase().match(/[a-z0-9]+(?:[.+-][a-z0-9]+)*/g)||[])].filter(term=>term.length>=3&&!["what","when","where","which","who","whom","whose","why","how","does","the","and","for","with","from","about","please","explain","latest","current","today","news","release","released","now","use","using","multiple","real","websites","website","read","reading","relevant","pages","page","cite","cited","links","link","search","sources","source"].includes(term));
   const collect=(rows,engine,limit)=> (rows||[]).filter(x=>{
     if(!x?.url)return false;
     if(!terms.length)return true;
     const hay=(String(x.title||"")+" "+String(x.text||"")+" "+String(x.url||"")).toLowerCase();
-    return terms.some(term=>hay.includes(term));
+    const matches=terms.filter(term=>hay.includes(term)).length;
+    return matches>=Math.min(2,terms.length);
   }).slice(0,limit).map(x=>({...x,engine}));
   const google=collect(googleResults,"Google Web",4);
   const bing=collect(bingResults,"Bing Web",5);
