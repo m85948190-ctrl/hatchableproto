@@ -1,4 +1,4 @@
-const VERSION = "kai51-qwen25-coder-05b-gguf-v1";
+const VERSION = "kai51-qwen25-coder-05b-gguf-v2-thread-tuned";
 const MODEL = "Qwen2.5-Coder-0.5B-Instruct";
 const MODEL_ID = "Qwen2.5-Coder-0.5B-Instruct · Q4_K_M GGUF";
 const MODEL_URL = "https://huggingface.co/featherless-ai-quants/oieieio-Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/oieieio-Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf";
@@ -96,9 +96,9 @@ export async function createKai51Engine({onProgress=()=>{},onReady=()=>{}}={}) {
         const modelBlob=await downloadOrRestoreModel(report);
         report(89,"Loading the downloaded Q4_K_M weights into the local WASM engine");
         await runtime.loadModel([modelBlob],{
-          n_ctx:2048,
-          n_batch:128,
-          n_threads:Math.max(1,Math.min(4,cores-1))
+          n_ctx:1536,
+          n_batch:256,
+          n_threads:Math.max(1,Math.min(6,cores-1))
         });
         report(91,"Running the local Coder model self-test");
         const test = await runtime.createChatCompletion([
