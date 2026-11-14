@@ -273,13 +273,13 @@ export default async function(req,res){
     const searched=await multiSearch(query,mode);
     const wiki=[];
     const links=searched.links||[];
-    const take=4;
+    const take=3;
     // Open a small, ranked set of result pages to limit bandwidth. Keep a
     // clearly labelled search-snippet fallback when a publisher blocks reading.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
       const snippet=clean(x.text||"",1400);
       try{
-        const timeout=1700;
+        const timeout=3200;
         const html=await Promise.race([browser.html(x.url),new Promise((_,reject)=>setTimeout(()=>reject(new Error("source timeout")),timeout))]);
         const text=pageText(html);
         const blocked=/just a moment|security verification|verify (?:that )?you are not a bot|confirm you.?re not a robot|unusual traffic|captcha|checking your browser|enable javascript and cookies to continue|access denied|you don.?t have permission|restricted country|request blocked|forbidden|wikimedia error|too many requests|error 429|http 429|rate limit|complete the following challenge|select all squares|human verification|protection\. privacy|donor privacy policy|please donate|support wikipedia|wikipedia.{0,100}(?:donat|fundrais)|(?:donat|fundrais).{0,100}wikipedia/i.test(text);

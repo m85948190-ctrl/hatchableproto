@@ -359,11 +359,11 @@
 
     if (wantsWeb) {
       const activeSources=Array.isArray(research?.sources)?research.sources:[];
-      const groundedEvidence=String(research?.evidence||"").slice(0,5000);
+      const groundedEvidence=String(research?.evidence||"").slice(0,3200);
       hooks.onSources?.(activeSources.map(({title,url,source,readStatus})=>({title,url,source,readStatus})));
       hooks.onStage?.("ai-reading",MODEL+" is reading and comparing "+activeSources.length+" retrieved webpages before writing the answer.");
       const groundedAnswer=await neural.generate(buildPrompt(text,history,groundedEvidence),history,{
-        signal:hooks.signal,maxTokens:420,temperature:0.35,topP:0.9
+        signal:hooks.signal,maxTokens:160,temperature:0.35,topP:0.9
       });
       if(!groundedAnswer?.response)throw new Error(MODEL+" returned an empty research answer.");
       hooks.onStage?.("composing",MODEL+" completed the source-grounded summary.");
