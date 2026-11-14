@@ -283,9 +283,9 @@ export default async function(req,res){
       freshQuery?Promise.resolve([]):wikipediaEvidence(query)
     ]);
     const links=searched.links||[];
-    const take=8;
-    // Open actual result pages, not just search snippets. Keep the snippet only
-    // as a clearly marked fallback when a publisher page is unavailable.
+    const take=5;
+    // Open a small, ranked set of result pages to limit bandwidth. Keep a
+    // clearly labelled search-snippet fallback when a publisher blocks reading.
     const pages=await Promise.all(links.slice(0,take).map(async x=>{
       const snippet=clean(x.text||"",1400);
       try{
@@ -298,17 +298,12 @@ export default async function(req,res){
       }catch{return {...x,searchSnippet:snippet,text:snippet,readStatus:snippet?"search-snippet-fallback":"unreadable"}}
     }));
     const terms=(queryVariants(query)[1]||query).toLowerCase().match(/[a-z0-9]{4,}/g)||[];
-    const relevantPages=pages.filter(x=>{
-      if(!terms.length)return true;
-      const content=(String(x.title||"")+" "+String(x.searchSnippet||x.text||"")).toLowerCase();
-      const matches=terms.filter(term=>content.includes(term.slice(0,Math.max(4,term.length-2)))).length;
-      // Search engines already rank the candidate pages. For long natural-language
-      // questions, one strong topic-term match is enough to keep a relevant page;
-      // the old fixed two-term gate discarded useful proofs and technical sources.
-      const required=terms.length>=5?1:Math.min(2,terms.length);
-      return matches>=required;
-    });
-    const combined=[...relevantPages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>(x.text||x.title)&&["page-read","wikipedia-article","wikipedia-summary"].includes(x.readStatus));
+    // Keep the search engines' ranked candidates instead of applying a second
+    // brittle keyword gate: technical proofs often use different wording.
+    const relevantPages=pages;
+    // A publisher-blocked page can still contribute its explicitly labelled
+    // search snippet. The answer model is told this is a lead, not verified text.
+    const combined=[...relevantPages,...wiki.map(x=>({...x,readStatus:x.readStatus||"wikipedia-article"}))].filter(x=>(x.text||x.title)&&["page-read","wikipedia-article","wikipedia-summary","search-snippet-fallback"].includes(x.readStatus));
     const seen=new Set();
     const sources=combined.filter(x=>{
       let host="";
